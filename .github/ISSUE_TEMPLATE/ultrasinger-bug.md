@@ -2,7 +2,7 @@
 name: ULTRASINGER BUG
 about: Any issues with the webui part only
 title: "[BUG] {ULTRASINGER}"
-labels: feature
+labels: bug
 assignees: binarygeek119
 
 ---
