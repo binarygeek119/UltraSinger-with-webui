@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} · UltraSinger WebUI</title>
+  <link rel="icon" href="/static/icon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="site-header glass">
+    <a href="/" class="brand" aria-label="UltraSinger WebUI — Home" style="color:inherit;text-decoration:none;">
+      <img class="brand-logo" src="/static/logo.png" alt="" decoding="async" />
+    </a>
+    <nav class="main-nav">
+      <a href="/">Home</a>
+      <a href="/jobs">Jobs</a>
+      <a href="/downloads">Downloads</a>
+      <a href="/settings">Settings</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block body %}{% endblock %}
+  </main>
+  <div class="banner-powered glass">Powered by UltraSinger · WebUI v{{ webui_version }}</div>
+</body>
+</html>

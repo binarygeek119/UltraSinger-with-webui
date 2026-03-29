@@ -13,5 +13,11 @@ test_output
 
 # default output folder
 output
+
+# WebUI runtime (config at data/webui_config.json may be kept locally)
+/data/jobs/
+/data/temp/
+/data/cookies.txt
+/data/history/
 /UltraSinger*.spec
 /registry_path.txt

@@ -19,6 +19,10 @@ from modules.Pitcher.pitched_data import PitchedData
 from modules.Pitcher.pitched_data_helper import get_frequencies_with_high_confidence
 from modules.Audio.key_detector import quantize_note_to_key
 
+# pretty_midi requires end > start; some pipeline segments can be zero-width or inverted
+_MIN_MIDI_NOTE_DURATION_SEC = 0.02
+
+
 def create_midi_instrument(midi_segments: list[MidiSegment]) -> object:
     """Converts an Ultrastar data to a midi instrument"""
 
@@ -28,7 +32,11 @@ def create_midi_instrument(midi_segments: list[MidiSegment]) -> object:
     velocity = 100
 
     for i, midi_segment in enumerate(midi_segments):
-        note = pretty_midi.Note(velocity, librosa.note_to_midi(midi_segment.note), midi_segment.start, midi_segment.end)
+        start = float(midi_segment.start)
+        end = float(midi_segment.end)
+        if end <= start:
+            end = start + _MIN_MIDI_NOTE_DURATION_SEC
+        note = pretty_midi.Note(velocity, librosa.note_to_midi(midi_segment.note), start, end)
         instrument.notes.append(note)
 
     return instrument

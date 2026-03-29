@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Jobs</h1>
+<div class="row panel glass" style="margin-bottom:1rem;padding:0.85rem 1rem;">
+  <button type="button" class="btn danger" id="btn-stop">Stop all jobs</button>
+  <button type="button" class="btn danger" id="btn-cancel-all">Cancel all jobs</button>
+  <button type="button" class="btn secondary" id="btn-resume">Resume processing</button>
+  <button type="button" class="btn secondary" id="btn-clear">Clear finished jobs</button>
+</div>
+<div id="global-msg" class="flash"></div>
+
+<div class="panel glass" style="overflow-x:auto;">
+  <table class="data" id="job-table">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Stage</th>
+        <th>Started</th>
+        <th>Duration</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+const tbody = document.querySelector('#job-table tbody');
+const globalMsg = document.getElementById('global-msg');
+
+function fmtDur(s) {
+  if (s == null || s === '') return '—';
+  const n = Number(s);
+  if (!isFinite(n)) return '—';
+  const m = Math.floor(n / 60);
+  const sec = Math.floor(n % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+function pill(st) {
+  const c = 'status-pill status-' + String(st || '').toLowerCase();
+  return '<span class="' + c + '">' + (st || '') + '</span>';
+}
+
+async function loadJobs() {
+  const r = await fetch('/api/jobs');
+  const j = await r.json();
+  tbody.innerHTML = (j.jobs || []).map(function (x) {
+    const dur = x.status === 'running' ? x.live_duration_seconds : x.duration_seconds;
+    const actions = [];
+    if (x.status === 'queued' || x.status === 'running') {
+      actions.push('<button class="btn secondary" data-act="cancel" data-id="' + x.job_id + '">Cancel</button>');
+    }
+    if (x.status === 'failed') {
+      actions.push('<button class="btn secondary" data-act="retry" data-id="' + x.job_id + '">Retry</button>');
+    }
+    if (['completed', 'failed', 'cancelled'].indexOf(x.status) >= 0) {
+      actions.push('<button class="btn secondary" data-act="clear" data-id="' + x.job_id + '">Clear</button>');
+    }
+    actions.push('<a class="btn secondary" href="/jobs/' + x.job_id + '">Details</a>');
+    return '<tr>' +
+      '<td>' + (x.title || '').replace(/</g, '&lt;') + '</td>' +
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' +
+        String(x.source || '').replace(/"/g, '&quot;') + '">' +
+        String(x.source || '').replace(/</g, '&lt;') + '</td>' +
+      '<td>' + pill(x.status) + '</td>' +
+      '<td>' + String(x.stage || '—').replace(/</g, '&lt;') + '</td>' +
+      '<td style="font-size:0.82rem;color:var(--muted)">' + (x.started_at ? String(x.started_at).slice(0, 19).replace('T', ' ') : '—') + '</td>' +
+      '<td>' + fmtDur(dur) + '</td>' +
+      '<td style="white-space:nowrap">' + actions.join(' ') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+tbody.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('button[data-act]');
+  if (!b) return;
+  const id = b.getAttribute('data-id');
+  const act = b.getAttribute('data-act');
+  globalMsg.textContent = '';
+  try {
+    if (act === 'cancel') await fetch('/api/jobs/' + id + '/cancel', { method: 'POST' });
+    if (act === 'retry') await fetch('/api/jobs/' + id + '/retry', { method: 'POST' });
+    if (act === 'clear') await fetch('/api/jobs/' + id, { method: 'DELETE' });
+    await loadJobs();
+  } catch (e) {
+    globalMsg.textContent = String(e);
+    globalMsg.className = 'flash err';
+  }
+});
+
+document.getElementById('btn-stop').onclick = async () => {
+  await fetch('/api/jobs/control/stop-all', { method: 'POST' });
+  globalMsg.textContent = 'Queue paused; running job cancelled.';
+  globalMsg.className = 'flash';
+  await loadJobs();
+};
+document.getElementById('btn-cancel-all').onclick = async () => {
+  const r = await fetch('/api/jobs/control/cancel-all', { method: 'POST' });
+  const j = await r.json();
+  globalMsg.textContent = 'Cancelled ' + (j.cancelled ?? 0) + ' job(s).';
+  globalMsg.className = 'flash';
+  await loadJobs();
+};
+document.getElementById('btn-resume').onclick = async () => {
+  await fetch('/api/jobs/control/resume', { method: 'POST' });
+  globalMsg.textContent = 'Processing resumed.';
+  await loadJobs();
+};
+document.getElementById('btn-clear').onclick = async () => {
+  const r = await fetch('/api/jobs/control/clear-all', { method: 'POST' });
+  const j = await r.json();
+  globalMsg.textContent = 'Cleared ' + j.cleared + ' job(s).';
+  await loadJobs();
+};
+
+loadJobs();
+setInterval(loadJobs, 2000);
+</script>
+{% endblock %}

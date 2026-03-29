@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Downloads</h1>
+<p style="color:var(--muted);">Completed jobs can be downloaded as a ZIP of the UltraSinger output folder.</p>
+
+<div class="panel glass">
+  <h2>Download all completed</h2>
+  <p style="font-size:0.88rem;color:var(--muted);">Builds one ZIP in the background (one folder per job).</p>
+  <button type="button" class="btn" id="btn-prep">Prepare download</button>
+  <span id="prep-status" class="flash" style="margin-left:0.5rem;"></span>
+  <div style="margin-top:0.75rem;">
+    <a class="btn" id="btn-get" href="#" style="display:none;">Download Now</a>
+  </div>
+</div>
+
+<div class="panel glass" style="overflow-x:auto;">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.65rem;margin-bottom:0.75rem;">
+    <h2 style="margin:0;">Per job</h2>
+    <button type="button" class="btn danger" id="btn-del-all" disabled>Delete all completed</button>
+  </div>
+  <p id="del-all-msg" class="flash" style="margin:0 0 0.75rem;"></p>
+  <table class="data" id="tbl">
+    <thead><tr><th>Title</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+const tbody = document.querySelector('#tbl tbody');
+
+async function load() {
+  const r = await fetch('/api/jobs');
+  const j = await r.json();
+  const done = (j.jobs || []).filter(x => x.status === 'completed');
+  const delAll = document.getElementById('btn-del-all');
+  if (delAll) delAll.disabled = done.length === 0;
+  tbody.innerHTML = done.map(x =>
+    '<tr><td>' + String(x.title || x.job_id).replace(/</g, '&lt;') + '</td>' +
+    '<td style="text-align:right;white-space:nowrap">' +
+    '<a class="btn secondary" href="/api/jobs/' + x.job_id + '/download">ZIP</a> ' +
+    '<button type="button" class="btn danger" data-del="' + x.job_id + '">Delete</button></td></tr>'
+  ).join('') || '<tr><td colspan="2" style="color:var(--muted)">No completed jobs yet.</td></tr>';
+}
+load();
+
+tbody.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('button[data-del]');
+  if (!b) return;
+  const id = b.getAttribute('data-del');
+  const tr = b.closest('tr');
+  const title = tr && tr.cells[0] ? tr.cells[0].textContent : id;
+  if (!confirm('Delete job and remove its files?\n\n' + title)) return;
+  const r = await fetch('/api/jobs/' + id, { method: 'DELETE' });
+  if (!r.ok) {
+    alert('Delete failed: ' + r.statusText);
+    return;
+  }
+  await load();
+});
+
+document.getElementById('btn-del-all').onclick = async () => {
+  const r0 = await fetch('/api/jobs');
+  const j0 = await r0.json();
+  const done = (j0.jobs || []).filter(x => x.status === 'completed');
+  const msg = document.getElementById('del-all-msg');
+  msg.textContent = '';
+  msg.className = 'flash';
+  if (done.length === 0) return;
+  if (!confirm('Delete all ' + done.length + ' completed job(s) and remove their files? This cannot be undone.')) return;
+  const r = await fetch('/api/downloads/clear-completed', { method: 'POST' });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    msg.textContent = out.detail || r.statusText || 'Delete failed';
+    msg.classList.add('err');
+    return;
+  }
+  msg.textContent = 'Deleted ' + (out.cleared ?? 0) + ' job(s).';
+  msg.classList.add('ok');
+  document.getElementById('btn-get').style.display = 'none';
+  document.getElementById('prep-status').textContent = '';
+  document.getElementById('prep-status').className = 'flash';
+  await load();
+};
+
+let taskId = null;
+let poll = null;
+
+document.getElementById('btn-prep').onclick = async () => {
+  const st = document.getElementById('prep-status');
+  const get = document.getElementById('btn-get');
+  get.style.display = 'none';
+  st.textContent = 'Preparing…';
+  st.className = 'flash';
+  const r = await fetch('/api/downloads/prepare-all', { method: 'POST' });
+  const j = await r.json();
+  if (!r.ok) {
+    st.textContent = j.detail || r.statusText;
+    st.classList.add('err');
+    return;
+  }
+  taskId = j.task_id;
+  if (poll) clearInterval(poll);
+  poll = setInterval(async () => {
+    const s = await fetch('/api/downloads/status/' + taskId).then(r => r.json());
+    if (s.ready) {
+      clearInterval(poll);
+      poll = null;
+      if (s.error) {
+        st.textContent = s.error;
+        st.className = 'flash err';
+        return;
+      }
+      st.textContent = 'Ready.';
+      st.classList.add('ok');
+      get.href = '/api/downloads/file/' + taskId;
+      get.style.display = 'inline-flex';
+    }
+  }, 800);
+};
+</script>
+{% endblock %}

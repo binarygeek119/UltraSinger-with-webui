@@ -1,6 +1,8 @@
 """YouTube Downloader"""
 
 import os
+from typing import Any
+
 import yt_dlp
 
 from modules.os_helper import sanitize_filename, get_unused_song_output_dir
@@ -9,16 +11,28 @@ from modules.ProcessData import MediaInfo
 from modules.Audio.bpm import get_bpm_from_file
 from modules.console_colors import ULTRASINGER_HEAD
 from modules.Image.image_helper import save_image
-from modules.musicbrainz_client import search_musicbrainz
+from modules.musicbrainz_client import SongInfo, search_musicbrainz
 from modules.ffmpeg_helper import separate_audio_video
+
+
+def _youtube_ydl_base_opts(cookiefile: str | None) -> dict[str, Any]:
+    """Shared yt-dlp options for YouTube.
+
+    ``ejs:github`` allows downloading a current External JS (challenge solver) bundle
+    when the installed ``yt-dlp-ejs`` pin is older than YouTube requires; without it,
+    extraction can fail with "only images" / "Requested format is not available".
+    See https://github.com/yt-dlp/yt-dlp/wiki/EJS
+    """
+    opts: dict[str, Any] = {"remote_components": ["ejs:github"]}
+    if cookiefile:
+        opts["cookiefile"] = cookiefile
+    return opts
 
 
 def get_youtube_title(url: str, cookiefile: str = None) -> tuple[str, str]:
     """Get the title of the YouTube video"""
 
-    ydl_opts = {
-        "cookiefile": cookiefile,
-    }
+    ydl_opts = _youtube_ydl_base_opts(cookiefile)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         result = ydl.extract_info(
             url, download=False  # We just want to extract the info
@@ -35,12 +49,15 @@ def __download_youtube_video_with_audio(url: str, clear_filename: str, output_pa
     """Download video with audio from YouTube and return the file extension"""
 
     print(f"{ULTRASINGER_HEAD} Downloading Video with Audio")
-    ydl_opts = {
-        "format": "bestvideo[ext=mp4]+bestaudio/best",
-        "outtmpl": output_path + "/" + clear_filename + ".%(ext)s",
-        "merge_output_format": "mp4",
-        "cookiefile": cookiefile,
-    }
+    ydl_opts = _youtube_ydl_base_opts(cookiefile)
+    ydl_opts.update(
+        {
+            # Prefer mp4 merge; fall back if YouTube only offers other containers
+            "format": "bestvideo[ext=mp4]+bestaudio/bestvideo*+bestaudio/best",
+            "outtmpl": output_path + "/" + clear_filename + ".%(ext)s",
+            "merge_output_format": "mp4",
+        }
+    )
     __start_download(ydl_opts, url)
     return "mp4"
 
@@ -49,11 +66,8 @@ def __download_youtube_thumbnail(url: str, clear_filename: str, output_path: str
     """Download thumbnail from YouTube"""
 
     print(f"{ULTRASINGER_HEAD} Downloading thumbnail")
-    ydl_opts = {
-        "skip_download": True,
-        "writethumbnail": True,
-        "cookiefile": cookiefile,
-    }
+    ydl_opts = _youtube_ydl_base_opts(cookiefile)
+    ydl_opts.update({"skip_download": True, "writethumbnail": True})
 
     thumbnail_url = download_and_convert_thumbnail(ydl_opts, url, clear_filename, output_path)
     return thumbnail_url
@@ -85,12 +99,20 @@ def __start_download(ydl_opts, url: str) -> None:
             raise Exception("Download failed with error: " + str(errors))
 
 
-def download_from_youtube(input_url: str, output_folder_path: str, cookiefile: str = None) -> tuple[str, str, str, MediaInfo]:
+def download_from_youtube(
+    input_url: str,
+    output_folder_path: str,
+    cookiefile: str = None,
+    use_youtube_metadata: bool = False,
+) -> tuple[str, str, str, MediaInfo]:
     """Download from YouTube"""
     (artist, title) = get_youtube_title(input_url, cookiefile)
 
-    # Get additional data for song
-    song_info = search_musicbrainz(title, artist)
+    if use_youtube_metadata:
+        print(f"{ULTRASINGER_HEAD} Using YouTube metadata (skipping MusicBrainz)")
+        song_info = SongInfo(title=title, artist=artist)
+    else:
+        song_info = search_musicbrainz(title, artist)
 
     basename_without_ext = sanitize_filename(f"{song_info.artist} - {song_info.title}")
     song_output = os.path.join(output_folder_path, basename_without_ext)

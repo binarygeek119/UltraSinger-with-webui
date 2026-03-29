@@ -226,8 +226,8 @@ def run() -> tuple[str, Score, Score]:
     # Create Ultrastar txt
     accurate_score, simple_score, ultrastar_file_output = CreateUltraStarTxt(process_data)
 
-    # Create Midi
-    if settings.create_midi:
+    # Create Midi (YARG mode skips .mid; midi_segments still used for txt/sheet)
+    if settings.create_midi and not settings.yarg_mode:
         create_midi_file(process_data.media_info.bpm, settings.output_folder_path, process_data.midi_segments,
                          process_data.basename)
 
@@ -482,7 +482,12 @@ def InitProcessData():
             settings.output_folder_path,
             process_data.process_data_paths.audio_output_file_path,
             process_data.media_info
-        ) = download_from_youtube(settings.input_file_path, settings.output_folder_path, settings.cookiefile)
+        ) = download_from_youtube(
+            settings.input_file_path,
+            settings.output_folder_path,
+            settings.cookiefile,
+            use_youtube_metadata=settings.youtube_metadata,
+        )
     else:
         # Audio/Video File
         print(f"{ULTRASINGER_HEAD} {gold_highlighted('Full Automatic Mode')}")
@@ -849,6 +854,10 @@ def init_settings(argv: list[str]) -> Settings:
                 sys.exit()
         elif opt in ("--cookiefile"):
             settings.cookiefile = arg
+        elif opt in ("--youtube_metadata",):
+            settings.youtube_metadata = True
+        elif opt in ("--yarg_mode",):
+            settings.yarg_mode = True
         elif opt in ("--interactive"):
             settings.interactive_mode = True
         elif opt in ("--quantize_to_key"):
@@ -896,7 +905,9 @@ def arg_options():
         "quantize_to_key",
         "interactive",
         "cookiefile=",
-        "ffmpeg="
+        "ffmpeg=",
+        "youtube_metadata",
+        "yarg_mode",
     ]
     return long, short
 

@@ -62,6 +62,8 @@ def print_help() -> None:
 
     [yt-dlp]
     --cookiefile            File name where cookies should be read from and dumped to.
+    --youtube_metadata      For YouTube URLs, use yt-dlp title/artist only (skip MusicBrainz).
+    --yarg_mode             Do not write a .mid file (UltraStar txt and audio outputs unchanged).
     
     [device]
     --force_cpu             Force all steps to be processed on CPU.

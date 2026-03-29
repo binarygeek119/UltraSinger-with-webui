@@ -42,6 +42,15 @@ dependencies = [
 windows = []
 linux = []
 macos = []
+webui = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
+    "aiofiles>=24.0.0",
+    "pystray>=0.19.5",
+    "pillow>=10.0.0",
+]
 dev = ["pytest", "isort", "black", "pylint"]
 
 [dependency-groups]

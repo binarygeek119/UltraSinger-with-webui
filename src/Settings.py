@@ -16,6 +16,7 @@ class Settings:
     CONFIDENCE_PROMPT_TIMEOUT = 4
 
     create_midi = True
+    yarg_mode = False  # WebUI/YARG: skip writing .mid (txt/audio unchanged)
     create_plot = False
     create_audio_chunks = False
     hyphenation = True
@@ -57,6 +58,8 @@ class Settings:
 
     # yt-dlp
     cookiefile = None
+    # YouTube URLs: use yt-dlp title/artist only (skip MusicBrainz for folder names, tags, cover lookup)
+    youtube_metadata = False
 
     # UltraSinger Evaluation Configuration
     test_songs_input_folder = None

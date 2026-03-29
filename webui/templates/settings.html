@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Settings</h1>
+<p style="color:var(--muted);">Stored in <code>data/webui_config.json</code> under your data directory. Changes are saved to disk automatically when you edit a field (use <strong>Save settings</strong> if you want the reminder about restarting after host/port changes).</p>
+
+<form id="settings-form" class="panel glass">
+  <h2>System</h2>
+  <label>Data directory (blank = repo /data)</label>
+  <input type="text" name="data_directory" id="data_directory" />
+  <label style="margin-top:0.65rem;">Listen host</label>
+  <input type="text" name="host" id="host" />
+  <label style="margin-top:0.65rem;">Port</label>
+  <input type="number" name="port" id="port" min="1" max="65535" />
+
+  <h2>Processing</h2>
+  <div class="checkbox-row"><input type="checkbox" name="force_cpu" id="force_cpu" /><label for="force_cpu" style="margin:0;">Force CPU (PyTorch)</label></div>
+  <div class="checkbox-row"><input type="checkbox" name="force_whisper_cpu" id="force_whisper_cpu" /><label for="force_whisper_cpu" style="margin:0;">Force Whisper on CPU</label></div>
+  <label style="margin-top:0.65rem;">Whisper model</label>
+  <select name="whisper_model" id="whisper_model">
+    <option value="tiny">tiny</option>
+    <option value="base">base</option>
+    <option value="small">small</option>
+    <option value="medium">medium</option>
+    <option value="large-v1">large-v1</option>
+    <option value="large-v2">large-v2</option>
+    <option value="large-v3">large-v3</option>
+  </select>
+  <label style="margin-top:0.65rem;">Whisper compute type</label>
+  <select name="whisper_compute_type" id="whisper_compute_type">
+    {% for val, label in whisper_compute_type_options %}
+    <option value="{{ val }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label style="margin-top:0.65rem;">Whisper batch size</label>
+  <input type="number" name="whisper_batch_size" id="whisper_batch_size" min="1" max="128" />
+  <label style="margin-top:0.65rem;">Demucs model</label>
+  <input type="text" name="demucs_model" id="demucs_model" placeholder="htdemucs" />
+  <label style="margin-top:0.65rem;">FFmpeg path (optional)</label>
+  <input type="text" name="user_ffmpeg_path" id="user_ffmpeg_path" />
+  <label style="margin-top:0.65rem;">Extra PATH for yt-dlp (dir containing yt-dlp)</label>
+  <input type="text" name="ytdlp_binary_path" id="ytdlp_binary_path" />
+  <h2>yt-dlp cookies</h2>
+  <p style="font-size:0.88rem;color:var(--muted);margin:0 0 0.75rem;line-height:1.5;">
+    Used for YouTube and other yt-dlp sources when videos are age-restricted, members-only, or show bot-check errors.
+    Paste the full contents of a Netscape-format <code>cookies.txt</code> (e.g. from <code>yt-dlp --cookies-from-browser firefox</code> or an exporter extension), or set a file path below. Saved text is written to <code>data/cookies.txt</code> and passed to UltraSinger as <code>--cookiefile</code>.
+  </p>
+  <div class="panel" style="padding:0.85rem;margin-bottom:1rem;background:var(--bg2);border-radius:10px;border:1px solid var(--stroke);">
+    <label for="cookie-paste">Paste cookies (Netscape format)</label>
+    <textarea id="cookie-paste" class="cookie-paste" wrap="soft" spellcheck="false" autocomplete="off" placeholder="Paste full Netscape cookies.txt contents here (tab-separated lines)"></textarea>
+    <div style="margin-top:0.65rem;">
+      <button type="button" class="btn secondary" id="btn-cookie-save">Save pasted cookies</button>
+    </div>
+    <div id="msg-cookie-settings" class="flash" style="margin-top:0.5rem;"></div>
+  </div>
+  <label for="cookiefile">Cookie file path (absolute path on this machine)</label>
+  <input type="text" name="cookiefile" id="cookiefile" placeholder="e.g. C:\Users\you\cookies.txt" autocomplete="off" />
+  <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;">Saving pasted cookies updates this path to <code>data/cookies.txt</code> automatically.</p>
+
+  <h2>Default job</h2>
+  <div class="checkbox-row"><input type="checkbox" name="yarg_mode" id="yarg_mode" /><label for="yarg_mode" style="margin:0;">YARG mode (omit <code>.mid</code>; txt/audio outputs unchanged)</label></div>
+  <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;">When YARG mode is on, per-job and bulk ZIP downloads use the same flat names as YARG folder export (<code>guitar.*</code>, <code>background.*</code>, <code>notes.txt</code>, <code>album.*</code>) under each song folder; <code>.mid</code> is omitted from those ZIPs. When off, ZIPs keep normal UltraSinger paths (and optional album rename when “omit Instrumental/Vocals” is checked).</p>
+  <div class="checkbox-row"><input type="checkbox" name="delete_workfiles_after_complete" id="delete_workfiles_after_complete" /><label for="delete_workfiles_after_complete" style="margin:0;">Delete Demucs/Whisper cache after success</label></div>
+
+  <h2>Downloads</h2>
+  <p style="font-size:0.82rem;color:var(--muted);margin:0 0 0.75rem;line-height:1.45;">YARG and UltraStar export toggles and folder paths are also written to <code>export_folders.json</code> in your data directory whenever settings are saved. If that file is newer than <code>webui_config.json</code>, those four fields are reloaded from it on startup (handy for hand-editing paths).</p>
+  <div class="checkbox-row"><input type="checkbox" name="zip_exclude_stem_tracks" id="zip_exclude_stem_tracks" /><label for="zip_exclude_stem_tracks" style="margin:0;">ZIP downloads: omit <code>[Instrumental]</code> and <code>[Vocals]</code> audio files</label></div>
+  <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;">Applies to per-job ZIP and “download all completed”. Song folder files on disk are unchanged. When enabled, the cover image in those ZIPs is named <code>album.&lt;ext&gt;</code> inside each song folder (same pick as YARG folder export). When off, original filenames are kept in the ZIP.</p>
+  <div class="checkbox-row" style="margin-top:0.65rem;"><input type="checkbox" name="yarg_export_enabled" id="yarg_export_enabled" /><label for="yarg_export_enabled" style="margin:0;">Enable YARG folder export</label></div>
+  <label style="margin-top:0.65rem;">YARG export folder (absolute path)</label>
+  <input type="text" name="yarg_export_path" id="yarg_export_path" placeholder="e.g. D:\YARG\Songs" autocomplete="off" />
+  <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;">When enabled and a path is set, each successful job writes a <strong>flat</strong> folder <code>&lt;folder&gt;/&lt;Artist - Title&gt;/</code> with fixed names (same inclusion rules as the YARG-style ZIP: respects Instrumental/Vocals omit above, no <code>.mid</code>): <code>guitar.&lt;ext&gt;</code> (instrumental stem if present, else main mix audio), <code>background.&lt;ext&gt;</code> (video), <code>notes.txt</code> (UltraStar txt), <code>album.&lt;ext&gt;</code> (cover image).</p>
+  <div class="checkbox-row" style="margin-top:0.65rem;"><input type="checkbox" name="ultrastar_export_enabled" id="ultrastar_export_enabled" /><label for="ultrastar_export_enabled" style="margin:0;">Enable UltraStar folder export</label></div>
+  <label style="margin-top:0.65rem;">UltraStar export folder (absolute path)</label>
+  <input type="text" name="ultrastar_export_path" id="ultrastar_export_path" placeholder="e.g. D:\UltraStar\Songs" autocomplete="off" />
+  <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;">When enabled with a path, copies the full song output (<code>.txt</code>, <code>.mid</code>, <code>[Instrumental]</code> / <code>[Vocals]</code> audio, cover, video, etc.) into <code>&lt;folder&gt;/&lt;Artist - Title&gt;/</code>. For these runs, <strong>YARG mode is not applied</strong> so UltraSinger still writes <code>.mid</code> and stem tracks (your “YARG mode” checkbox is ignored only while this export is active and the path is set).</p>
+
+  <h2>Storage &amp; cleanup</h2>
+  <label>Job retention (hours)</label>
+  <input type="number" name="job_retention_hours" id="job_retention_hours" min="1" />
+  <div class="checkbox-row"><input type="checkbox" name="cleanup_on_startup" id="cleanup_on_startup" /><label for="cleanup_on_startup" style="margin:0;">Cleanup on startup</label></div>
+  <label style="margin-top:0.65rem;">Cleanup interval (hours)</label>
+  <input type="number" name="cleanup_interval_hours" id="cleanup_interval_hours" min="1" />
+
+  <h2>Debug</h2>
+  <div class="checkbox-row"><input type="checkbox" name="debug_logging" id="debug_logging" /><label for="debug_logging" style="margin:0;">Verbose server logging</label></div>
+
+  <h2>Windows tray</h2>
+  <div class="checkbox-row"><input type="checkbox" name="tray_enabled" id="tray_enabled" /><label for="tray_enabled" style="margin:0;">Enable tray (use start script / python -m webui)</label></div>
+  <div class="checkbox-row"><input type="checkbox" name="start_minimized" id="start_minimized" /><label for="start_minimized" style="margin:0;">Start minimized</label></div>
+  <div class="checkbox-row"><input type="checkbox" name="open_browser_on_start" id="open_browser_on_start" /><label for="open_browser_on_start" style="margin:0;">Open browser on start</label></div>
+  <div class="checkbox-row"><input type="checkbox" name="minimize_to_tray_on_close" id="minimize_to_tray_on_close" /><label for="minimize_to_tray_on_close" style="margin:0;">Minimize to tray on close (tray app)</label></div>
+  <div class="checkbox-row"><input type="checkbox" name="tray_notifications" id="tray_notifications" /><label for="tray_notifications" style="margin:0;">Tray notifications</label></div>
+
+  <div style="margin-top:1.25rem;">
+    <button type="submit" class="btn">Save settings</button>
+    <span id="msg" class="flash" style="margin-left:0.5rem;"></span>
+  </div>
+</form>
+
+<script>
+const CHECKBOX_IDS = ['force_cpu', 'force_whisper_cpu', 'zip_exclude_stem_tracks', 'yarg_export_enabled', 'ultrastar_export_enabled', 'yarg_mode', 'delete_workfiles_after_complete',
+  'cleanup_on_startup', 'debug_logging', 'tray_enabled', 'start_minimized',
+  'open_browser_on_start', 'minimize_to_tray_on_close', 'tray_notifications'];
+
+let settingsLoadGuard = true;
+let settingsDebounceTimer = null;
+const AUTOSAVE_MS = 450;
+
+async function load() {
+  const r = await fetch('/api/settings');
+  const j = await r.json();
+  const s = j.settings || {};
+  for (const k of Object.keys(s)) {
+    const el = document.getElementById(k);
+    if (!el) continue;
+    if (el.type === 'checkbox') el.checked = !!s[k];
+    else el.value = s[k] == null ? '' : s[k];
+  }
+}
+
+function buildSettingsBody(form) {
+  const fd = new FormData(form);
+  const body = {};
+  fd.forEach((v, k) => { body[k] = v; });
+  for (const id of CHECKBOX_IDS) {
+    const el = document.getElementById(id);
+    if (el) body[id] = el.checked;
+  }
+  body.port = parseInt(body.port, 10);
+  body.whisper_batch_size = parseInt(body.whisper_batch_size, 10);
+  body.job_retention_hours = parseInt(body.job_retention_hours, 10);
+  body.cleanup_interval_hours = parseInt(body.cleanup_interval_hours, 10);
+  return body;
+}
+
+let _settingsSaveChain = Promise.resolve();
+
+function saveSettingsToServer(options) {
+  const silent = options && options.silent;
+  const run = _settingsSaveChain.then(async function () {
+    const form = document.getElementById('settings-form');
+    const msg = document.getElementById('msg');
+    let r;
+    try {
+      r = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildSettingsBody(form)),
+      });
+    } catch (err) {
+      msg.textContent = 'Save failed';
+      msg.className = 'flash err';
+      return false;
+    }
+    if (r.ok) {
+      if (!silent) {
+        settingsLoadGuard = true;
+        try {
+          await load();
+        } finally {
+          settingsLoadGuard = false;
+        }
+        msg.textContent = 'Saved and reloaded from server. Restart the app if you changed host or port.';
+        msg.className = 'flash ok';
+      }
+      return true;
+    }
+    msg.textContent = 'Save failed';
+    msg.className = 'flash err';
+    return false;
+  });
+  _settingsSaveChain = run.catch(function () {});
+  return run;
+}
+
+function scheduleAutoSave() {
+  if (settingsLoadGuard) return;
+  clearTimeout(settingsDebounceTimer);
+  settingsDebounceTimer = setTimeout(function () {
+    settingsDebounceTimer = null;
+    saveSettingsToServer({ silent: true });
+  }, AUTOSAVE_MS);
+}
+
+function flushAutoSave() {
+  if (settingsLoadGuard) return;
+  clearTimeout(settingsDebounceTimer);
+  settingsDebounceTimer = null;
+  saveSettingsToServer({ silent: true });
+}
+
+(async function initSettings() {
+  await load();
+  settingsLoadGuard = false;
+
+  const form = document.getElementById('settings-form');
+  form.addEventListener('change', function (e) {
+    const t = e.target;
+    if (!t || t.id === 'cookie-paste') return;
+    if (settingsLoadGuard) return;
+    flushAutoSave();
+  });
+  form.addEventListener('input', function (e) {
+    const t = e.target;
+    if (!t || t.id === 'cookie-paste') return;
+    if (settingsLoadGuard) return;
+    if (t.type === 'checkbox') return;
+    scheduleAutoSave();
+  });
+  form.addEventListener('blur', function (e) {
+    const t = e.target;
+    if (!t || !form.contains(t)) return;
+    if (t.id === 'cookie-paste') return;
+    if (settingsLoadGuard) return;
+    if (t.tagName === 'BUTTON') return;
+    flushAutoSave();
+  }, true);
+})();
+
+document.getElementById('settings-form').onsubmit = async function (e) {
+  e.preventDefault();
+  clearTimeout(settingsDebounceTimer);
+  settingsDebounceTimer = null;
+  await saveSettingsToServer({ silent: false });
+};
+
+document.getElementById('btn-cookie-save').onclick = async () => {
+  const ta = document.getElementById('cookie-paste');
+  const msgEl = document.getElementById('msg-cookie-settings');
+  msgEl.textContent = '';
+  msgEl.className = 'flash';
+  const raw = ta ? ta.value : '';
+  if (!raw.trim()) {
+    msgEl.textContent = 'Paste your cookies text first.';
+    msgEl.classList.add('err');
+    return;
+  }
+  try {
+    const r = await fetch('/api/cookies/paste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: raw }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : (Array.isArray(j.detail) ? j.detail.map(function (x) { return x.msg || x; }).join(' ') : r.statusText));
+    msgEl.textContent = 'Saved. Path set to: ' + (j.cookiefile || 'data/cookies.txt');
+    msgEl.classList.add('ok');
+    settingsLoadGuard = true;
+    try {
+      await load();
+    } finally {
+      settingsLoadGuard = false;
+    }
+  } catch (err) {
+    msgEl.textContent = err.message || String(err);
+    msgEl.classList.add('err');
+  }
+};
+</script>
+{% endblock %}

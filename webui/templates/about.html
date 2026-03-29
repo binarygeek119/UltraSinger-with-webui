@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>About UltraSinger WebUI</h1>
+<div class="panel glass" style="line-height:1.65;color:var(--muted);">
+  <p style="color:var(--text);">
+    This WebUI is integrated into the UltraSinger repository: the browser layer queues work, and each job runs
+    <strong>UltraSinger.py</strong> in a separate subprocess with its own output folder under <code>data/jobs/</code>.
+  </p>
+  <p>
+    Dependencies match the main project (WhisperX, Demucs, yt-dlp, FFmpeg, etc.). The WebUI adds
+    FastAPI, Uvicorn, and optional <code>pystray</code> for the Windows tray entrypoint.
+  </p>
+  <p>
+    <strong>yt-dlp:</strong> restricted videos often need a valid <code>cookies.txt</code>. Export cookies from your browser
+    in Netscape format and upload them from the Home page, or set the path in Settings.
+  </p>
+  <p>
+    <strong>Disclaimer:</strong> Only process content you have the right to use. UltraSinger and this UI are tools;
+    you are responsible for compliance with platform terms and copyright.
+  </p>
+  <p style="font-size:0.9rem;">
+    Portions of this interface were generated with AI assistance and reviewed for integration with UltraSinger’s CLI.
+  </p>
+</div>
+{% endblock %}

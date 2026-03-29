@@ -1,0 +1,409 @@
+:root {
+  --bg0: #0c0e14;
+  --bg1: rgba(28, 32, 44, 0.65);
+  --bg2: rgba(38, 44, 60, 0.55);
+  --stroke: rgba(255, 255, 255, 0.08);
+  --text: #e8eaef;
+  --muted: #9aa3b2;
+  --accent: #6eb5ff;
+  --accent2: #a78bfa;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --radius: 14px;
+  --blur: 18px;
+  --font: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font);
+  color: var(--text);
+  background: radial-gradient(1200px 800px at 10% -10%, #1a2240 0%, transparent 55%),
+    radial-gradient(900px 600px at 100% 0%, #2a1a38 0%, transparent 50%),
+    var(--bg0);
+  background-attachment: fixed;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+.glass {
+  background: var(--bg1);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+header.site-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0.55rem 1rem 0 0;
+  margin: 0.65rem auto 0;
+  max-width: 1100px;
+  gap: 0.65rem;
+}
+
+.brand {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0 0 1rem;
+}
+
+.brand-logo {
+  flex-shrink: 0;
+  width: min(88px, 22vw);
+  height: min(88px, 22vw);
+  object-fit: contain;
+  border-radius: clamp(10px, 2.5vw, 18px);
+  display: block;
+  margin: 0;
+  padding: 0;
+  /* Bigger on screen only; layout box unchanged so header size stays the same */
+  transform: scale(2.88) translateY(28px);
+  transform-origin: bottom left;
+}
+
+nav.main-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  padding-bottom: 0.6rem;
+}
+
+nav.main-nav a {
+  color: var(--muted);
+  padding: 0.3rem 0.35rem 0.4rem;
+}
+nav.main-nav a:hover {
+  color: var(--text);
+}
+
+main.container {
+  max-width: 1100px;
+  margin: 1rem auto 5rem;
+  padding: 0 1.25rem;
+}
+
+h1 {
+  font-size: 1.55rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 1.5rem 0 0.65rem;
+}
+
+.panel {
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 1rem;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="url"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: var(--bg2);
+  color: var(--text);
+  font: inherit;
+}
+
+textarea {
+  min-height: 120px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+
+textarea.cookie-paste {
+  width: 100%;
+  min-height: 14rem;
+  margin-top: 0.35rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+/* Skinned file input (matches glass inputs + .btn secondary) */
+.file-input-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+input[type="file"].file-input-skinned {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--text);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: var(--bg2);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="file"].file-input-skinned:hover {
+  border-color: rgba(110, 181, 255, 0.25);
+}
+
+input[type="file"].file-input-skinned:focus {
+  outline: none;
+  border-color: rgba(110, 181, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(110, 181, 255, 0.15);
+}
+
+input[type="file"].file-input-skinned::file-selector-button,
+input[type="file"].file-input-skinned::-webkit-file-upload-button {
+  margin-right: 0.85rem;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(145deg, rgba(110, 181, 255, 0.18), rgba(167, 139, 250, 0.1));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+input[type="file"].file-input-skinned:hover::file-selector-button,
+input[type="file"].file-input-skinned:hover::-webkit-file-upload-button {
+  border-color: rgba(110, 181, 255, 0.4);
+  background: linear-gradient(145deg, rgba(110, 181, 255, 0.26), rgba(167, 139, 250, 0.14));
+}
+
+input[type="file"].file-input-skinned:focus::file-selector-button,
+input[type="file"].file-input-skinned:focus::-webkit-file-upload-button {
+  border-color: rgba(110, 181, 255, 0.5);
+}
+
+.url-queue-inline__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.url-queue-inline__row input[type="url"] {
+  flex: 1 1 14rem;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+.url-queue-inline__row .btn {
+  flex-shrink: 0;
+}
+
+.file-upload-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.file-upload-inline__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-upload-inline__row input[type="file"].file-input-skinned--inline {
+  flex: 1 1 14rem;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+.file-upload-inline__row .btn {
+  flex-shrink: 0;
+}
+
+.file-chosen-name {
+  font-size: 0.82rem;
+  color: var(--muted);
+  min-height: 1.25em;
+  word-break: break-all;
+}
+.file-chosen-name.has-file {
+  color: var(--text);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 140px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(145deg, rgba(110, 181, 255, 0.2), rgba(167, 139, 250, 0.12));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover {
+  border-color: rgba(110, 181, 255, 0.35);
+}
+.btn.secondary {
+  background: var(--bg2);
+}
+.btn.danger {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.status-queued {
+  background: rgba(251, 191, 36, 0.2);
+  color: var(--warn);
+}
+.status-running {
+  background: rgba(110, 181, 255, 0.2);
+  color: var(--accent);
+}
+.status-completed {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--ok);
+}
+.status-failed,
+.status-cancelled {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--bad);
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+table.data th,
+table.data td {
+  text-align: left;
+  padding: 0.55rem 0.45rem;
+  border-bottom: 1px solid var(--stroke);
+}
+table.data th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.log-box {
+  max-height: 420px;
+  overflow: auto;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.banner-powered {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  z-index: 50;
+}
+
+.flash {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.flash.err {
+  color: var(--bad);
+}
+.flash.ok {
+  color: var(--ok);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+.checkbox-row input {
+  width: auto;
+}
+
+@media (max-width: 640px) {
+  header.site-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

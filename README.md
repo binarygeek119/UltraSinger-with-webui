@@ -17,6 +17,8 @@
 
 > ⚠️ _This project is still under development!_
 
+> **Web UI & tray:** This repository includes an optional **browser-based Web UI** and **system tray** integration that wrap the main UltraSinger CLI. That layer was produced **only with AI-assisted coding** as an add-on to the core app; it is **not** part of the official upstream UltraSinger project and is **unofficial**. Use it at your own discretion; bugs or behavior should be reported in **this** fork/repo, not assumed to be maintained by the original UltraSinger authors.
+
 UltraSinger is a tool to automatically create UltraStar.txt, midi and notes from music.
 It automatically pitches UltraStar files, adding text and tapping to UltraStar files and creates separate UltraStar karaoke files.
 It also can re-pitch current UltraStar files and calculates the possible in-game score.
@@ -45,6 +47,8 @@ This will help me a lot to keep this project alive and improve it.
   - [💻 How to use this source code](#-how-to-use-this-source-code)
     - [Installation](#installation)
     - [Run](#run)
+  - [🌐 Web UI & tray (unofficial add-on)](#-web-ui--tray-unofficial-add-on)
+    - [Web UI settings](#web-ui-settings)
   - [📖 How to use the App](#-how-to-use-the-app)
     - [🎶 Input](#-input)
       - [Audio (full automatic)](#audio-full-automatic)
@@ -79,6 +83,64 @@ This will help me a lot to keep this project alive and improve it.
 
 * In root folder just run `run_on_windows.bat`, `run_on_linux.sh` or `run_on_mac.command` to start the app.
 * Now you can use the UltraSinger source code with `py UltraSinger.py [opt] [mode] [transcription] [pitcher] [extra]`. See [How to use](#-how-to-use-the-app) for more information.
+
+## 🌐 Web UI & tray (unofficial add-on)
+
+The **Web UI** is an optional, **AI-only-coded** integration layered on top of the main UltraSinger application. It is **unofficial** and separate from the core maintainers’ scope.
+
+**What it provides**
+
+* Browser UI for queuing jobs (URLs, playlists, file uploads), live logs, per-job ZIP downloads, settings, and cleanup.
+* Optional **Windows-friendly system tray** mode (`pystray`): run the server in the background with a tray menu (open UI, jobs, stop all, resume, exit).
+
+**Art & visuals:** The Web UI look (layout, CSS, inline logo graphic, tray icon, and similar assets) is **homemade**—simple project-made styling, not a separate design system or stock artwork package.
+
+**For developers:** This add-on is here to **fill a gap**—a friendlier entry point so **more people** can use UltraSinger without living in the terminal. It is **not** meant to stay as a permanent AI-scaffold forever. The **end goal** is for someone to **overhaul** the `webui/` code: audit it, refactor it, and **replace** it with **human-written**, **human-maintained** code you stand behind. Treat what is here as a **bootstrap**; PRs and rewrites toward that outcome are welcome.
+
+**Install** (from the repository root, with your UltraSinger venv active):
+
+```bash
+pip install -e ".[webui]"
+```
+
+**Run**
+
+* **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` if `.venv` exists in the repo root.
+* **Tray:** set `tray_enabled` to `true` in `data/webui_config.json` (or use the Settings page), then start with `python -m webui` again.
+
+Configuration and job data live under `data/` (for example `webui_config.json`, `jobs/`). See the `webui/` package for implementation details.
+
+### Web UI settings
+
+_This subsection (Web UI settings, jobs/downloads behavior, environment variables, and the related CLI flags listed here) was **updated with AI assistance** to reflect newer options—double-check against the running Web UI and `webui/` code if anything disagrees._
+
+Settings are edited in the browser (**Settings** page) and stored in `data/webui_config.json` (under your configured data directory).
+
+| Area | Option | Notes |
+|------|--------|--------|
+| **System** | Data directory | Blank = repository `data/`. |
+| | Listen host / port | After changing host or port, restart the app. |
+| **Processing** | Force CPU / Force Whisper on CPU | Passed through to UltraSinger. |
+| | Whisper model, compute type, batch size | Compute type is a dropdown (CTranslate2 / faster-whisper values); empty = UltraSinger default (float16 on CUDA, int8 on CPU). |
+| | Demucs model, FFmpeg path, yt-dlp PATH | Extra directory for `yt-dlp` on `PATH`. |
+| **Home (queue from URL)** | Use YouTube metadata only | Per queue action: skips MusicBrainz for that job; uses yt-dlp title/artist for folder names and tags. |
+| **yt-dlp cookies** | Paste or file path | Netscape `cookies.txt`; saved under data when pasted. |
+| **Default job** | YARG mode | Omits writing `.mid` for WebUI jobs **unless** UltraStar folder export is enabled with a path (see below). With YARG mode on, **ZIP** downloads (per job and bulk) use the same **export-folder-style** names inside each song folder (`guitar.*`, `background.*`, `notes.txt`, `album.*`; no `.mid` in the archive). |
+| | Delete Demucs/Whisper cache after success | UltraSinger `--keep_cache` is omitted when this is on. |
+| **Downloads** | ZIP: omit Instrumental/Vocals | Applies to per-job ZIP and “download all”; does not delete files from the job folder. With this on **and YARG mode off**, only the cover is renamed to ``<song folder>/album.<ext>``. If **YARG mode** is on, stem omission still applies to which files are included, and the whole ZIP layout follows export-style renaming (see Default job). |
+| | Enable YARG folder export + path | After each successful job, writes a **flat** folder `<path>/<Artist - Title>/` with fixed names (same inclusion rules as the YARG-style ZIP; no `.mid`): `guitar.<ext>`, `background.<ext>`, `notes.txt`, `album.<ext>`. |
+| | Enable UltraStar folder export + path | Copies **full** song output (`.txt`, `.mid`, instrumental/vocals audio, cover, video, etc.) into `<path>/<Artist - Title>/`. When this is **enabled** and the path is **non-empty**, the worker runs UltraSinger **without** `--yarg_mode` so `.mid` and stems exist even if “YARG mode” is checked. |
+| **Storage & cleanup** | Job retention, cleanup on startup / interval | Background cleanup of old job metadata. |
+| **Debug** | Verbose server logging | |
+| **Windows tray** | Tray options | Require starting via `python -m webui` (or the start script). |
+
+**Jobs page:** **Stop all** pauses the queue and cancels the currently running job. **Cancel all jobs** cancels every queued and running job without toggling pause. **Resume** unpauses; **Clear finished** removes finished rows. Per row: Cancel, Retry (clears that job’s `output/` before re-queue), Clear.
+
+**Downloads page:** Per-job ZIP saves as **`<song folder>.zip`** (same name as the UltraSinger output folder under `output/`, e.g. `Artist - Title.zip`). “Download all” builds one archive whose entries are grouped under each song folder name (not `job_…` prefixes); duplicate song names in one batch get a `[job_id]` suffix on the folder. Bulk download file: `completed_songs.zip`. **Delete** / **Delete all completed**, bulk ZIP prepare.
+
+**Environment:** `ULTRASINGER_WEBUI_KEEP_JOBS=1` — jobs under the data directory are **not** wiped on WebUI startup (otherwise `jobs/` is cleared each start). `WEBUI_NO_BROWSER=1` forces no browser tab on start (overrides Settings “open browser on start”). `ULTRASINGER_WEBUI_HOST` and `ULTRASINGER_WEBUI_PORT` override listen address and port (e.g. Docker); they take precedence over values in `webui_config.json`.
+
+**CLI (non-WebUI):** `--youtube_metadata` uses only yt-dlp metadata for YouTube URLs (no MusicBrainz). `--yarg_mode` skips writing `.mid`. See `UltraSinger.py -h` for full help.
 
 ## 📖 How to use the App
 
@@ -134,10 +196,14 @@ _Not all options working now!_
 
     [yt-dlp]
     --cookiefile            File name where cookies should be read from
+    --youtube_metadata      For YouTube URLs, use yt-dlp title/artist only (skip MusicBrainz)
 
     [device]
     --force_cpu             Force all steps to be processed on CPU.
     --force_whisper_cpu     Only whisper will be forced to cpu
+
+    [export / Web UI related]
+    --yarg_mode             Do not write a .mid file (UltraStar txt and audio outputs unchanged)
 ```
 
 For standard use, you only need to use [opt]. All other options are optional.

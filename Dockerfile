@@ -27,7 +27,7 @@ WORKDIR /app/UltraSinger
 
 # Install dependencies from pyproject.toml directly without venv (container is already isolated)
 # Using build isolation (without --no-build-isolation) so uv handles all build dependencies automatically
-RUN uv pip install --system --python 3.12 -e .
+RUN uv pip install --system --python 3.12 -e ".[webui]"
 
 # Install PyTorch with CUDA support (override the CPU version from pyproject.toml)
 RUN uv pip install --system --python 3.12 torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128 --reinstall
@@ -40,5 +40,12 @@ COPY . /app/UltraSinger
 RUN chown -R 1000:1000 /app/UltraSinger
 USER 1000:1000
 
+# Web UI: FastAPI + Uvicorn (optional; CLI still runs from src/)
+ENV PYTHONPATH=/app/UltraSinger
+ENV WEBUI_NO_BROWSER=1
+ENV ULTRASINGER_WEBUI_HOST=0.0.0.0
+EXPOSE 8756
+
 WORKDIR /app/UltraSinger/src
+# Interactive shell by default. Web UI: `cd .. && python -m webui` then open http://localhost:8756
 CMD ["bash"]
