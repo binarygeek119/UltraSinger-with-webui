@@ -1,5 +1,5 @@
 ---
-name: Webui bug
+name: WEBUI BUG
 about: Any issues with the webui part only
 title: "[BUG] {WEBUi}"
 labels: bug
