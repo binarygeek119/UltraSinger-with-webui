@@ -1,8 +1,8 @@
 ---
-name: WEBUI WANTTED FEATURE
+name: WEBUI WANTED FEATURE
 about: Any wanted features for the webui part only
-title: "[Feature] {WEBUi}"
-labels: bug
+title: "[Feature] {WEBUI}"
+labels: feature
 assignees: binarygeek119
 
 ---
