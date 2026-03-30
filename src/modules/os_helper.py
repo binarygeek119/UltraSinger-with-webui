@@ -1,5 +1,6 @@
 """OS helper functions."""
 
+import hashlib
 import os
 import shutil
 
@@ -65,6 +66,22 @@ def sanitize_filename(fname: str) -> str:
     if fname.endswith("."):
         fname = fname.rstrip(" .")  # Windows does not like trailing periods
     return fname
+
+
+def shorten_filename_component(name: str, max_len: int = 96) -> str:
+    """Trim long file/folder name components and append a stable hash suffix.
+
+    This helps avoid Windows path-length issues in deeply nested cache/output paths.
+    """
+    n = (name or "").strip().rstrip(" .")
+    if not n:
+        return "untitled"
+    if len(n) <= max_len:
+        return n
+    digest = hashlib.sha1(n.encode("utf-8")).hexdigest()[:8]
+    # Keep room for separator + hash suffix.
+    keep = max(1, max_len - 9)
+    return f"{n[:keep]}-{digest}".rstrip(" .")
 
 
 def get_unused_song_output_dir(path: str) -> str:

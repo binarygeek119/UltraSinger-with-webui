@@ -100,6 +100,11 @@ async def lifespan(app: FastAPI):
         yield
         stop_cleanup.set()
         worker_service.stop()
+        try:
+            backup_path = job_manager.save_jobs_backup_snapshot(keep_latest=5)
+            log.info("Saved jobs backup snapshot: %s", backup_path)
+        except Exception:
+            log.exception("Failed to save jobs backup snapshot on shutdown")
         log.info("UltraSinger WebUI shutdown complete")
     finally:
         release()

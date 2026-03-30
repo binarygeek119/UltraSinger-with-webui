@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -31,6 +32,7 @@ log = logging.getLogger("ultrasinger.webui.api")
 router = APIRouter(prefix="/api", tags=["api"])
 
 _JOB_ID_RE = re.compile(r"^job_[a-zA-Z0-9]+$")
+AUDIO_SUFFIXES = frozenset({".wav", ".mp3", ".flac", ".m4a", ".ogg", ".opus", ".aac", ".wma"})
 
 
 def _require_job_id(job_id: str) -> None:
@@ -54,9 +56,293 @@ def _job_public(job: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _truthy(v: Any) -> bool:
+    return v is True or str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _pick_song_roots_for_scan(cfg) -> list[tuple[str, Path]]:
+    roots: list[tuple[str, Path]] = []
+    yarg = (cfg.yarg_export_path or "").strip()
+    ultra = (cfg.ultrastar_export_path or "").strip()
+    if yarg:
+        roots.append(("YARG", Path(yarg).expanduser()))
+    if ultra:
+        roots.append(("UltraStar", Path(ultra).expanduser()))
+    if not roots:
+        # Fallback: common local "Songs" folder name in repo root.
+        roots.append(("Songs", Path("songs")))
+    return roots
+
+
+def _is_under_any_root(path: Path, roots: list[tuple[str, Path]]) -> bool:
+    for _label, root in roots:
+        try:
+            if path.is_relative_to(root.resolve()):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def _extract_video_url_from_txt(song_dir: Path) -> str:
+    txt_files = sorted(song_dir.glob("*.txt"))
+    for txt in txt_files:
+        try:
+            for line in txt.read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.startswith("#VIDEOURL:"):
+                    val = line.split(":", 1)[1].strip()
+                    if val.startswith("http://") or val.startswith("https://"):
+                        return val
+        except OSError:
+            continue
+    return ""
+
+
+def _pick_audio_file(song_dir: Path) -> str:
+    audio_files = [
+        p for p in song_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in AUDIO_SUFFIXES
+    ]
+    if not audio_files:
+        return ""
+    base = song_dir.name
+    exact = next((p for p in audio_files if p.stem == base), None)
+    if exact:
+        return str(exact)
+    non_stems = [p for p in audio_files if "[Vocals]" not in p.name and "[Instrumental]" not in p.name]
+    if non_stems:
+        return str(sorted(non_stems, key=lambda x: x.name.lower())[0])
+    return str(sorted(audio_files, key=lambda x: x.name.lower())[0])
+
+
+def _build_exported_song_row(export_type: str, song_dir: Path) -> dict[str, Any]:
+    name = song_dir.name
+    artist = ""
+    title = name
+    if " - " in name:
+        artist, title = [x.strip() for x in name.split(" - ", 1)]
+    try:
+        file_count = sum(1 for f in song_dir.rglob("*") if f.is_file())
+    except OSError:
+        file_count = 0
+
+    video_url = _extract_video_url_from_txt(song_dir)
+    audio_path = _pick_audio_file(song_dir)
+    mode = "youtube" if video_url else ("audio" if audio_path else "")
+    return {
+        "name": name,
+        "artist": artist,
+        "title": title,
+        "type": export_type,
+        "path": str(song_dir),
+        "file_count": file_count,
+        "reprocess_mode": mode,
+        "video_url": video_url,
+        "audio_path": audio_path,
+    }
+
+
+def _scan_exported_songs(cfg) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for export_type, root in _pick_song_roots_for_scan(cfg):
+        try:
+            root_resolved = root.resolve()
+        except OSError:
+            continue
+        if not root_resolved.is_dir():
+            continue
+        for p in root_resolved.iterdir():
+            if not p.is_dir():
+                continue
+            key = (export_type, str(p).lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(_build_exported_song_row(export_type, p))
+    rows.sort(key=lambda x: (str(x.get("artist") or "").lower(), str(x.get("title") or "").lower()))
+    return rows
+
+
 @router.get("/jobs")
 def api_list_jobs() -> dict[str, Any]:
     return {"jobs": [_job_public(j) for j in job_manager.list_jobs()]}
+
+
+@router.get("/exported-songs")
+def api_exported_songs() -> dict[str, Any]:
+    cfg = load_config()
+    songs = _scan_exported_songs(cfg)
+    return {"songs": songs, "count": len(songs)}
+
+
+@router.post("/exported-songs/reprocess")
+async def api_exported_songs_reprocess(request: Request) -> dict[str, Any]:
+    body = await request.json()
+    song_path_raw = str(body.get("path") or "").strip()
+    if not song_path_raw:
+        raise HTTPException(400, "Missing song folder path")
+    cfg = load_config()
+    roots = _pick_song_roots_for_scan(cfg)
+    try:
+        song_dir = Path(song_path_raw).expanduser().resolve()
+    except OSError as e:
+        raise HTTPException(400, f"Invalid path: {e}") from e
+    if not song_dir.is_dir():
+        raise HTTPException(404, "Song folder not found")
+    if not _is_under_any_root(song_dir, roots):
+        raise HTTPException(400, "Path is not inside configured export folders")
+
+    row = _build_exported_song_row("Detected", song_dir)
+    title = str(row.get("title") or song_dir.name)
+    artist = str(row.get("artist") or "")
+    video_url = str(row.get("video_url") or "")
+    audio_path = str(row.get("audio_path") or "")
+
+    if video_url:
+        job = job_manager.create_job(
+            title,
+            artist,
+            video_url,
+            "url",
+            video_url,
+            cookiefile=cfg.cookiefile.strip() or None,
+            youtube_metadata=True,
+        )
+        return {"ok": True, "mode": "youtube", "job": job}
+    if audio_path:
+        job = job_manager.create_job(
+            title,
+            artist,
+            audio_path,
+            "upload",
+            audio_path,
+            cookiefile=None,
+            youtube_metadata=False,
+        )
+        return {"ok": True, "mode": "audio", "job": job}
+
+    raise HTTPException(400, "No reprocessable source found (VIDEOURL or audio file)")
+
+
+@router.post("/exported-songs/reprocess-all")
+def api_exported_songs_reprocess_all() -> dict[str, Any]:
+    cfg = load_config()
+    songs = _scan_exported_songs(cfg)
+    queued = 0
+    failed = 0
+    skipped = 0
+
+    for row in songs:
+        title = str(row.get("title") or row.get("name") or "Unknown").strip()
+        artist = str(row.get("artist") or "").strip()
+        video_url = str(row.get("video_url") or "").strip()
+        audio_path = str(row.get("audio_path") or "").strip()
+
+        try:
+            if video_url:
+                job_manager.create_job(
+                    title,
+                    artist,
+                    video_url,
+                    "url",
+                    video_url,
+                    cookiefile=cfg.cookiefile.strip() or None,
+                    youtube_metadata=True,
+                )
+                queued += 1
+                continue
+            if audio_path:
+                job_manager.create_job(
+                    title,
+                    artist,
+                    audio_path,
+                    "upload",
+                    audio_path,
+                    cookiefile=None,
+                    youtube_metadata=False,
+                )
+                queued += 1
+                continue
+            skipped += 1
+        except Exception:
+            failed += 1
+            log.exception("bulk reprocess enqueue failed for %s", row.get("path"))
+
+    return {
+        "ok": True,
+        "queued": queued,
+        "failed": failed,
+        "skipped": skipped,
+        "total": len(songs),
+    }
+
+
+@router.get("/jobs/export")
+def api_export_jobs() -> FileResponse:
+    cfg = load_config()
+    jobs = job_manager.list_jobs()
+    payload = {
+        "format": "ultrasinger-webui-jobs",
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "jobs": jobs,
+    }
+    temp = cfg.effective_data_dir() / "temp"
+    temp.mkdir(parents=True, exist_ok=True)
+    out = temp / "jobs_export.json"
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    return FileResponse(out, filename="ultrasinger_jobs_export.json", media_type="application/json")
+
+
+@router.post("/jobs/import")
+async def api_import_jobs(file: UploadFile = File(...)) -> dict[str, Any]:
+    raw = await file.read()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise HTTPException(400, f"Invalid JSON file: {e}") from e
+
+    if isinstance(data, dict):
+        jobs_raw = data.get("jobs", [])
+    elif isinstance(data, list):
+        jobs_raw = data
+    else:
+        raise HTTPException(400, "JSON must be a list of jobs or an object with a 'jobs' array")
+
+    if not isinstance(jobs_raw, list):
+        raise HTTPException(400, "'jobs' must be an array")
+
+    imported = 0
+    skipped = 0
+    for row in jobs_raw:
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        title = str(row.get("title") or row.get("source") or "Imported job").strip()
+        artist = str(row.get("artist") or "").strip()
+        source = str(row.get("source") or "").strip()
+        source_type = str(row.get("source_type") or "url").strip() or "url"
+        input_path = str(row.get("input_path") or source).strip()
+        if not input_path:
+            skipped += 1
+            continue
+        cookiefile_raw = row.get("cookiefile")
+        cookiefile = str(cookiefile_raw).strip() if cookiefile_raw is not None else ""
+        cookiefile = cookiefile or None
+        youtube_metadata = _truthy(row.get("youtube_metadata"))
+        job_manager.create_job(
+            title,
+            artist,
+            source or input_path,
+            source_type,
+            input_path,
+            cookiefile=cookiefile,
+            youtube_metadata=youtube_metadata,
+        )
+        imported += 1
+
+    return {"ok": True, "imported": imported, "skipped": skipped, "total": len(jobs_raw)}
 
 
 @router.get("/jobs/{job_id}")
@@ -203,6 +489,13 @@ def api_retry(job_id: str) -> dict[str, Any]:
     return {"ok": ok}
 
 
+@router.post("/jobs/{job_id}/prioritize")
+def api_prioritize(job_id: str) -> dict[str, Any]:
+    _require_job_id(job_id)
+    ok = job_manager.move_queued_job_to_front(job_id)
+    return {"ok": ok}
+
+
 @router.delete("/jobs/{job_id}")
 def api_clear(job_id: str) -> dict[str, Any]:
     _require_job_id(job_id)
@@ -222,6 +515,12 @@ def api_cancel_all() -> dict[str, Any]:
     return {"cancelled": n}
 
 
+@router.post("/jobs/control/retry-failed")
+def api_retry_failed() -> dict[str, Any]:
+    n = job_manager.retry_all_failed()
+    return {"retried": n}
+
+
 @router.post("/jobs/control/resume")
 def api_resume() -> dict[str, str]:
     job_manager.resume_processing()
@@ -231,6 +530,12 @@ def api_resume() -> dict[str, str]:
 @router.post("/jobs/control/clear-all")
 def api_clear_all() -> dict[str, Any]:
     n = job_manager.clear_all_finished()
+    return {"cleared": n}
+
+
+@router.post("/jobs/control/clear-failed")
+def api_clear_failed() -> dict[str, Any]:
+    n = job_manager.clear_all_failed()
     return {"cleared": n}
 
 

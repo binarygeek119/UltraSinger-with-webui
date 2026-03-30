@@ -56,6 +56,15 @@ def page_downloads(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/exported-songs", response_class=HTMLResponse)
+def page_exported_songs(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request,
+        "exported_songs.html",
+        {"title": "Exported Songs", "webui_version": __version__},
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(

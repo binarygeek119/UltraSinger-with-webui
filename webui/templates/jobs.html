@@ -4,13 +4,18 @@
 <div class="row panel glass" style="margin-bottom:1rem;padding:0.85rem 1rem;">
   <button type="button" class="btn danger" id="btn-stop">Stop all jobs</button>
   <button type="button" class="btn danger" id="btn-cancel-all">Cancel all jobs</button>
+  <button type="button" class="btn secondary" id="btn-retry-failed">Retry all failed jobs</button>
+  <button type="button" class="btn secondary" id="btn-clear-failed">Clear failed jobs</button>
   <button type="button" class="btn secondary" id="btn-resume">Resume processing</button>
   <button type="button" class="btn secondary" id="btn-clear">Clear finished jobs</button>
+  <a class="btn secondary" id="btn-export-jobs" href="/api/jobs/export">Export jobs</a>
+  <button type="button" class="btn secondary" id="btn-import-jobs">Import jobs</button>
+  <input type="file" id="import-jobs-file" accept=".json,application/json" style="display:none;" />
 </div>
 <div id="global-msg" class="flash"></div>
 
-<div class="panel glass" style="overflow-x:auto;">
-  <table class="data" id="job-table">
+<div class="panel glass">
+  <table class="data" id="job-table" style="table-layout:fixed;">
     <thead>
       <tr>
         <th>Title</th>
@@ -59,22 +64,36 @@ function renderSourceCell(x) {
   const safeTitle = escHtml(src);
   const safeText = escHtml(src);
   const looksLikeUrl = /^https?:\/\//i.test(src);
+  const cellStyle = 'max-width:unset;overflow-wrap:anywhere;word-break:break-word;white-space:normal';
   if (looksLikeUrl) {
-    return '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeTitle + '">' +
+    return '<td style="' + cellStyle + '" title="' + safeTitle + '">' +
       '<a href="' + safeTitle + '" target="_blank" rel="noopener noreferrer">' + safeText + '</a></td>';
   }
-  return '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeTitle + '">' +
+  return '<td style="' + cellStyle + '" title="' + safeTitle + '">' +
     safeText + '</td>';
 }
 
 async function loadJobs() {
   const r = await fetch('/api/jobs');
   const j = await r.json();
-  tbody.innerHTML = (j.jobs || []).map(function (x) {
+  const jobs = j.jobs || [];
+  const runningJob = jobs.find((x) => x && x.status === 'running');
+  const queuedCount = jobs.filter((x) => x && x.status === 'queued').length;
+  if (runningJob) {
+    document.title = 'Running (' + queuedCount + ')';
+  } else if (queuedCount > 0) {
+    document.title = 'Queued (' + queuedCount + ')';
+  } else {
+    document.title = 'Idle (0)';
+  }
+  tbody.innerHTML = jobs.map(function (x) {
     const dur = x.status === 'running' ? x.live_duration_seconds : x.duration_seconds;
     const actions = [];
     if (x.status === 'queued' || x.status === 'running') {
       actions.push('<button class="btn secondary" data-act="cancel" data-id="' + x.job_id + '">Cancel</button>');
+    }
+    if (x.status === 'queued') {
+      actions.push('<button class="btn secondary" data-act="prioritize" data-id="' + x.job_id + '">Move to top</button>');
     }
     if (x.status === 'failed' || x.status === 'completed') {
       actions.push('<button class="btn secondary" data-act="retry" data-id="' + x.job_id + '">Retry</button>');
@@ -91,7 +110,7 @@ async function loadJobs() {
       '<td>' + escHtml(x.stage || '—') + '</td>' +
       '<td style="font-size:0.82rem;color:var(--muted)">' + (x.started_at ? String(x.started_at).slice(0, 19).replace('T', ' ') : '—') + '</td>' +
       '<td>' + fmtDur(dur) + '</td>' +
-      '<td style="white-space:nowrap">' + actions.join(' ') + '</td>' +
+      '<td style="white-space:normal">' + actions.join(' ') + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -104,6 +123,7 @@ tbody.addEventListener('click', async (ev) => {
   globalMsg.textContent = '';
   try {
     if (act === 'cancel') await fetch('/api/jobs/' + id + '/cancel', { method: 'POST' });
+    if (act === 'prioritize') await fetch('/api/jobs/' + id + '/prioritize', { method: 'POST' });
     if (act === 'retry') await fetch('/api/jobs/' + id + '/retry', { method: 'POST' });
     if (act === 'clear') await fetch('/api/jobs/' + id, { method: 'DELETE' });
     await loadJobs();
@@ -126,6 +146,20 @@ document.getElementById('btn-cancel-all').onclick = async () => {
   globalMsg.className = 'flash';
   await loadJobs();
 };
+document.getElementById('btn-retry-failed').onclick = async () => {
+  const r = await fetch('/api/jobs/control/retry-failed', { method: 'POST' });
+  const j = await r.json();
+  globalMsg.textContent = 'Retried ' + (j.retried ?? 0) + ' failed job(s).';
+  globalMsg.className = 'flash';
+  await loadJobs();
+};
+document.getElementById('btn-clear-failed').onclick = async () => {
+  const r = await fetch('/api/jobs/control/clear-failed', { method: 'POST' });
+  const j = await r.json();
+  globalMsg.textContent = 'Cleared ' + (j.cleared ?? 0) + ' failed job(s).';
+  globalMsg.className = 'flash';
+  await loadJobs();
+};
 document.getElementById('btn-resume').onclick = async () => {
   await fetch('/api/jobs/control/resume', { method: 'POST' });
   globalMsg.textContent = 'Processing resumed.';
@@ -137,6 +171,32 @@ document.getElementById('btn-clear').onclick = async () => {
   globalMsg.textContent = 'Cleared ' + j.cleared + ' job(s).';
   await loadJobs();
 };
+document.getElementById('btn-import-jobs').onclick = () => {
+  const inp = document.getElementById('import-jobs-file');
+  if (inp) inp.click();
+};
+document.getElementById('import-jobs-file').addEventListener('change', async (e) => {
+  const inp = e.target;
+  const f = inp && inp.files && inp.files[0];
+  if (!f) return;
+  globalMsg.textContent = '';
+  globalMsg.className = 'flash';
+  try {
+    const fd = new FormData();
+    fd.append('file', f);
+    const r = await fetch('/api/jobs/import', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || r.statusText || 'Import failed');
+    globalMsg.textContent = 'Imported ' + (j.imported ?? 0) + ' job(s), skipped ' + (j.skipped ?? 0) + '.';
+    globalMsg.className = 'flash ok';
+    await loadJobs();
+  } catch (err) {
+    globalMsg.textContent = err.message || String(err);
+    globalMsg.className = 'flash err';
+  } finally {
+    inp.value = '';
+  }
+});
 
 loadJobs();
 setInterval(loadJobs, 2000);

@@ -133,6 +133,42 @@ class JobManager:
         d.mkdir(parents=True, exist_ok=True)
         (d / "job.json").write_text(json.dumps(job, indent=2), encoding="utf-8")
 
+    def save_jobs_backup_snapshot(self, keep_latest: int = 5) -> Path:
+        cfg = self._cfg()
+        backup_dir = cfg.history_dir() / "job_backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        with self._lock:
+            jobs = [dict(j) for j in self._jobs.values()]
+        jobs.sort(key=lambda j: str(j.get("created_at") or ""))
+
+        payload = {
+            "format": "ultrasinger-webui-jobs-backup",
+            "version": 1,
+            "exported_at": _now_iso(),
+            "jobs": jobs,
+            "count": len(jobs),
+        }
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        out = backup_dir / f"jobs_backup_{stamp}.json"
+        out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+        try:
+            keep_n = max(1, int(keep_latest))
+        except (TypeError, ValueError):
+            keep_n = 5
+        files = sorted(
+            backup_dir.glob("jobs_backup_*.json"),
+            key=lambda p: p.stat().st_mtime,
+        )
+        while len(files) > keep_n:
+            old = files.pop(0)
+            try:
+                old.unlink()
+            except OSError:
+                log.warning("Could not remove old jobs backup: %s", old)
+        return out
+
     def append_history(self, job_id: str, event: str) -> None:
         cfg = self._cfg()
         cfg.history_dir().mkdir(parents=True, exist_ok=True)
@@ -385,6 +421,22 @@ class JobManager:
         self.append_history(job_id, "retry")
         return True
 
+    def move_queued_job_to_front(self, job_id: str) -> bool:
+        """Move a queued job to the front so it runs next."""
+        with self._lock:
+            j = self._jobs.get(job_id)
+            if not j or j.get("status") != JobStatus.QUEUED.value:
+                return False
+            if job_id not in self._queue:
+                return False
+            try:
+                self._queue.remove(job_id)
+            except ValueError:
+                return False
+            self._queue.appendleft(job_id)
+        self.append_history(job_id, "prioritized")
+        return True
+
     def clear_job(self, job_id: str) -> bool:
         with self._lock:
             j = self._jobs.get(job_id)
@@ -410,11 +462,17 @@ class JobManager:
                 if j.get("status")
                 in (
                     JobStatus.COMPLETED.value,
-                    JobStatus.FAILED.value,
                     JobStatus.CANCELLED.value,
                 )
             ]
         for jid in ids:
+            with self._lock:
+                cur = self._jobs.get(jid)
+                if not cur or cur.get("status") not in (
+                    JobStatus.COMPLETED.value,
+                    JobStatus.CANCELLED.value,
+                ):
+                    continue
             if self.clear_job(jid):
                 cleared += 1
         return cleared
@@ -432,6 +490,34 @@ class JobManager:
             if self.clear_job(jid):
                 cleared += 1
         return cleared
+
+    def clear_all_failed(self) -> int:
+        """Remove every failed job."""
+        cleared = 0
+        with self._lock:
+            ids = [
+                jid
+                for jid, j in self._jobs.items()
+                if j.get("status") == JobStatus.FAILED.value
+            ]
+        for jid in ids:
+            if self.clear_job(jid):
+                cleared += 1
+        return cleared
+
+    def retry_all_failed(self) -> int:
+        """Retry every failed job by re-queuing it and clearing old output."""
+        with self._lock:
+            ids = [
+                jid
+                for jid, j in self._jobs.items()
+                if j.get("status") == JobStatus.FAILED.value
+            ]
+        n = 0
+        for jid in ids:
+            if self.retry_job(jid):
+                n += 1
+        return n
 
     def _terminate_tree(self, proc) -> None:
         import signal

@@ -8,12 +8,12 @@
 <section class="panel glass">
   <h2>Queue from URL</h2>
   <p style="font-size:0.88rem;color:var(--muted);margin:0 0 0.75rem;line-height:1.5;">
-    Paste a single video link or a playlist URL. Playlists are expanded into one job per entry; other links are queued as a single job.
+    Paste one URL per line (single videos and/or playlists). Playlists are expanded into one job per entry; other links are queued as single jobs.
   </p>
   <form id="form-url">
     <label for="url">URL</label>
     <div class="url-queue-inline__row">
-      <input type="url" id="url" name="url" placeholder="https://..." required />
+      <textarea id="url" name="url" placeholder="https://...\nhttps://...\n(one URL per line)" required rows="4"></textarea>
       <button type="submit" class="btn">Queue</button>
     </div>
     <div class="checkbox-row" style="margin-top:0.65rem;">
@@ -59,12 +59,45 @@ async function postForm(url, data, msgEl) {
 
 document.getElementById('form-url').onsubmit = async (e) => {
   e.preventDefault();
-  const fd = new FormData(e.target);
   const msg = document.getElementById('msg-url');
-  const j = await postForm('/api/jobs/from-url', fd, msg);
-  msg.textContent = j.count === 1 ? 'Queued 1 job.' : 'Queued ' + j.count + ' jobs.';
-  msg.classList.add('ok');
-  e.target.reset();
+  const form = e.target;
+  const raw = String((form.elements.url && form.elements.url.value) || '');
+  const urls = raw
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0);
+  if (!urls.length) {
+    msg.textContent = 'Enter at least one URL.';
+    msg.className = 'flash err';
+    return;
+  }
+  msg.textContent = '';
+  msg.className = 'flash';
+
+  let queued = 0;
+  let failed = 0;
+  for (const u of urls) {
+    const fd = new FormData();
+    fd.append('url', u);
+    if (form.elements.youtube_metadata && form.elements.youtube_metadata.checked) {
+      fd.append('youtube_metadata', 'on');
+    }
+    try {
+      const j = await postForm('/api/jobs/from-url', fd, msg);
+      queued += Number(j.count || 0);
+    } catch (_err) {
+      failed += 1;
+    }
+  }
+
+  if (failed > 0) {
+    msg.textContent = 'Queued ' + queued + ' job(s). Failed URL(s): ' + failed + '.';
+    msg.className = 'flash err';
+  } else {
+    msg.textContent = 'Queued ' + queued + ' job(s) from ' + urls.length + ' URL(s).';
+    msg.className = 'flash ok';
+    form.reset();
+  }
 };
 
 function bindFileChosenName(inputId, displayId) {

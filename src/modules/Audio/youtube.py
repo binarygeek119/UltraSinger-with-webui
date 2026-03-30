@@ -5,7 +5,7 @@ from typing import Any
 
 import yt_dlp
 
-from modules.os_helper import sanitize_filename, get_unused_song_output_dir
+from modules.os_helper import sanitize_filename, shorten_filename_component, get_unused_song_output_dir
 from modules import os_helper
 from modules.ProcessData import MediaInfo
 from modules.Audio.bpm import get_bpm_from_file
@@ -135,6 +135,7 @@ def download_from_youtube(
         song_info = search_musicbrainz(title, artist)
 
     basename_without_ext = sanitize_filename(f"{song_info.artist} - {song_info.title}")
+    basename_without_ext = shorten_filename_component(basename_without_ext, max_len=96)
     song_output = os.path.join(output_folder_path, basename_without_ext)
     song_output = get_unused_song_output_dir(song_output)
     os_helper.create_folder(song_output)
