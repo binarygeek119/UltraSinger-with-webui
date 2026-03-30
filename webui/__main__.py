@@ -18,7 +18,9 @@ def main() -> None:
         print(
             "UltraSinger WebUI needs the optional Web UI packages (uvicorn, fastapi, …).\n"
             "From the repository root, run:\n"
-            "  install_webui.bat\n"
+            "  install_webui.bat              (Windows)\n"
+            "  ./install_webui_linux.sh     (Linux)\n"
+            "  ./install_webui_macos.sh     (macOS)\n"
             "Or with this same Python/venv active:\n"
             '  pip install -e ".[webui]"',
             file=sys.stderr,

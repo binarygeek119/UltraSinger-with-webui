@@ -91,7 +91,7 @@ The **Web UI** is an optional, **AI-only-coded** integration layered on top of t
 **What it provides**
 
 * Browser UI for queuing jobs (URLs, playlists, file uploads), live logs, per-job ZIP downloads, settings, and cleanup.
-* Optional **Windows-friendly system tray** mode (`pystray`): run the server in the background with a tray menu (open UI, jobs, stop all, resume, exit).
+* Optional **desktop system tray** mode (`pystray`): run the server in the background with a tray menu (open UI, jobs, stop all, resume, exit).
 
 **Art & visuals:** The Web UI look (layout, CSS, inline logo graphic, tray icon, and similar assets) is **homemade**—simple project-made styling, not a separate design system or stock artwork package.
 
@@ -103,9 +103,14 @@ The **Web UI** is an optional, **AI-only-coded** integration layered on top of t
 pip install -e ".[webui]"
 ```
 
+Linux/macOS convenience scripts:
+* `./install_webui_linux.sh`
+* `./install_webui_macos.sh`
+* `./install_webui.sh` (auto-select based on OS)
+
 **Run**
 
-* **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` if `.venv` exists in the repo root.
+* **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` (and on Linux/macOS: `start_ultrasinger_webui_linux.sh` / `start_ultrasinger_webui_macos.command`) if `.venv` exists in the repo root.
 * **Tray:** set `tray_enabled` to `true` in `data/webui_config.json` (or use the Settings page), then start with `python -m webui` again.
 
 Configuration and job data live under `data/` (for example `webui_config.json`, `jobs/`). See the `webui/` package for implementation details.
@@ -132,7 +137,7 @@ Settings are edited in the browser (**Settings** page) and stored in `data/webui
 | | Enable UltraStar folder export + path | Copies **full** song output (`.txt`, `.mid`, instrumental/vocals audio, cover, video, etc.) into `<path>/<Artist - Title>/`. When this is **enabled** and the path is **non-empty**, the worker runs UltraSinger **without** `--yarg_mode` so `.mid` and stems exist even if “YARG mode” is checked. |
 | **Storage & cleanup** | Job retention, cleanup on startup / interval | Background cleanup of old job metadata. |
 | **Debug** | Verbose server logging | |
-| **Windows tray** | Tray options | Require starting via `python -m webui` (or the start script). |
+| **Tray** | Tray options | Require starting via `python -m webui` (or the start script). |
 
 **Jobs page:** **Stop all** pauses the queue and cancels the currently running job. **Cancel all jobs** cancels every queued and running job without toggling pause. **Resume** unpauses; **Clear finished** removes finished rows. Per row: Cancel, Retry (clears that job’s `output/` before re-queue), Clear.
 

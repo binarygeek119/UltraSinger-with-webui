@@ -79,7 +79,7 @@ class WebUIConfig:
     ultrastar_export_enabled: bool = False
     ultrastar_export_path: str = ""
 
-    # Tray (Windows)
+    # Tray (desktop)
     tray_enabled: bool = False
     start_minimized: bool = False
     open_browser_on_start: bool = True

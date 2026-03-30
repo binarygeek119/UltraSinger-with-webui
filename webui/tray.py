@@ -1,4 +1,4 @@
-"""Optional Windows (cross-platform) tray integration."""
+"""Optional desktop tray integration (via pystray)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,11 @@ def _static_icon_ico() -> Path:
 def _icon_image() -> "Image.Image":
     ico = _static_icon_ico()
     if ico.is_file():
-        return Image.open(ico).convert("RGBA")
+        try:
+            return Image.open(ico).convert("RGBA")
+        except Exception:
+            # Fallback: PIL may not be able to open .ico on some platforms/builds.
+            pass
     size = 64
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -48,6 +52,14 @@ def run_tray_app(cfg: WebUIConfig | None = None) -> None:
     if root not in sys.path:
         sys.path.insert(0, root)
 
+    host = (cfg.host or "").strip()
+    if host in ("0.0.0.0", ""):
+        host = "127.0.0.1"
+    elif host == "::":
+        host = "[::1]"
+    base_url = f"http://{host}:{int(cfg.port)}"
+    jobs_url = f"{base_url}/jobs"
+
     def serve() -> None:
         uvicorn.run(
             "webui.app:app",
@@ -60,7 +72,7 @@ def run_tray_app(cfg: WebUIConfig | None = None) -> None:
     server_thread.start()
 
     def on_open() -> None:
-        webbrowser.open(f"http://{cfg.host}:{cfg.port}/jobs")
+        webbrowser.open(jobs_url)
 
     def on_stop() -> None:
         job_manager.stop_all()
@@ -80,7 +92,7 @@ def run_tray_app(cfg: WebUIConfig | None = None) -> None:
         os._exit(0)  # noqa: S404 — terminate daemon uvicorn thread
 
     icon.menu = pystray.Menu(
-        item("Open WebUI", lambda: webbrowser.open(f"http://{cfg.host}:{cfg.port}")),
+        item("Open WebUI", lambda: webbrowser.open(base_url)),
         item("Jobs", on_open),
         item("Stop All", on_stop),
         item("Resume", on_resume),
