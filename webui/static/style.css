@@ -390,6 +390,9 @@ table.data th {
 .flash.ok {
   color: var(--ok);
 }
+.flash.warn {
+  color: var(--warn);
+}
 
 .checkbox-row {
   display: flex;
@@ -612,4 +615,44 @@ table.data th {
 .ref-word-tray .ref-tray-empty {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.scroll-jump {
+  position: fixed;
+  right: 1rem;
+  bottom: 3.75rem;
+  z-index: 40;
+  display: none;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.scroll-jump-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: var(--bg1);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.scroll-jump-btn:hover {
+  border-color: rgba(110, 181, 255, 0.45);
+  background: rgba(110, 181, 255, 0.14);
+}
+
+input.ai-key-input {
+  background: linear-gradient(145deg, rgba(110, 181, 255, 0.08), rgba(167, 139, 250, 0.06));
+  border-color: rgba(110, 181, 255, 0.35);
+  letter-spacing: 0.04em;
+}
+
+input.ai-key-input:focus {
+  outline: none;
+  border-color: rgba(110, 181, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(110, 181, 255, 0.18);
 }

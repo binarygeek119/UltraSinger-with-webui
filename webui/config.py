@@ -59,6 +59,10 @@ class WebUIConfig:
     user_ffmpeg_path: str = ""
     ytdlp_binary_path: str = ""
     cookiefile: str = ""
+    ai_provider: str = "openai"  # openai | selfhost
+    ai_model: str = ""
+    ai_base_url: str = ""
+    ai_api_key: str = ""
 
     # Default job
     yarg_mode: bool = False

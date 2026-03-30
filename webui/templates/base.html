@@ -18,6 +18,7 @@
       <a href="/downloads">Downloads</a>
       <a href="/exported-songs">Exported Songs</a>
       <a href="/lyrics-compare">Lyrics compare</a>
+      <a href="/ai-lyric-replace">AI lyric replace</a>
       <a href="/settings">Settings</a>
       <a href="/about">About</a>
     </nav>
@@ -25,6 +26,36 @@
   <main class="container">
     {% block body %}{% endblock %}
   </main>
+  <div id="scroll-jump" class="scroll-jump" aria-label="Page scroll controls">
+    <button type="button" id="scroll-top-btn" class="scroll-jump-btn" title="Scroll to top" aria-label="Scroll to top">▲</button>
+    <button type="button" id="scroll-bottom-btn" class="scroll-jump-btn" title="Scroll to bottom" aria-label="Scroll to bottom">▼</button>
+  </div>
   <div class="banner-powered glass">Powered by UltraSinger · WebUI v{{ webui_version }}</div>
+  <script>
+  (function () {
+    const wrap = document.getElementById('scroll-jump');
+    const topBtn = document.getElementById('scroll-top-btn');
+    const bottomBtn = document.getElementById('scroll-bottom-btn');
+    if (!wrap || !topBtn || !bottomBtn) return;
+
+    function refreshVisibility() {
+      const doc = document.documentElement;
+      const scrollable = doc.scrollHeight > (window.innerHeight + 48);
+      wrap.style.display = scrollable ? 'flex' : 'none';
+    }
+
+    topBtn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    bottomBtn.addEventListener('click', function () {
+      const doc = document.documentElement;
+      window.scrollTo({ top: doc.scrollHeight, behavior: 'smooth' });
+    });
+
+    window.addEventListener('resize', refreshVisibility);
+    window.addEventListener('load', refreshVisibility);
+    refreshVisibility();
+  })();
+  </script>
 </body>
 </html>

@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from webui.config import load_config
 from webui.services.lyrics_remote import LyricsFetchResult, fetch_all_sources
+from webui.services.ai_lyrics_replace import ai_replace_words
 from webui.ultrastar_plain_lyrics import (
     align_reference_chips_to_run_indices,
     apply_words_to_txt_file,
@@ -242,4 +243,38 @@ async def api_syllable_view(request: Request) -> dict[str, Any]:
         "merged_ultrasinger_display": "\n".join(str(r["display"]) for r in runs),
         "reference_chips": chips,
         "chip_run_indices": chip_run_indices,
+    }
+
+
+@router.post("/ai-replace")
+async def api_ai_replace(request: Request) -> dict[str, Any]:
+    """Use AI provider to rewrite generated words to better match reference lyrics."""
+    body = await request.json()
+    provider = str(body.get("provider") or "").strip().lower()
+    model = str(body.get("model") or "").strip()
+    api_key = str(body.get("api_key") or "").strip()
+    base_url = str(body.get("base_url") or "").strip()
+    reference_text = str(body.get("reference_text") or "")
+    words = body.get("generated_words")
+    if not isinstance(words, list):
+        raise HTTPException(400, "generated_words must be an array of strings")
+    str_words = [str(w) for w in words]
+    try:
+        out_words, length_warning = ai_replace_words(
+            provider=provider,
+            model=model,
+            api_key=api_key,
+            base_url=base_url or None,
+            reference_text=reference_text,
+            generated_words=str_words,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {
+        "provider": provider,
+        "model": model,
+        "word_count": len(out_words),
+        "ai_words": out_words,
+        "ai_plain": "\n".join(out_words),
+        "warning": length_warning or "",
     }

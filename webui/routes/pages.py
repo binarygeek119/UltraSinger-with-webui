@@ -74,6 +74,15 @@ def page_lyrics_compare(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/ai-lyric-replace", response_class=HTMLResponse)
+def page_ai_lyric_replace(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request,
+        "ai_lyric_replace.html",
+        {"title": "AI lyric replace", "webui_version": __version__},
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(

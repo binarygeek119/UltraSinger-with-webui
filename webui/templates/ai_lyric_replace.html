@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>AI lyric replace</h1>
+<p style="color:var(--muted);max-width:52rem;margin:-0.5rem 0 1rem;">
+  Load an exported song, fetch reference lyrics from databases, then run AI to rewrite UltraSinger note words so they fit the reference while keeping the same note-slot count.
+  Supports OpenAI and self-hosted OpenAI-compatible APIs.
+</p>
+
+<div class="lyrics-compare-toolbar panel glass" style="padding:0.85rem 1rem;">
+  <label>Artist
+    <input type="text" id="artist-in" placeholder="e.g. Eminem" autocomplete="off"
+      style="min-width:11rem;padding:0.45rem 0.65rem;border-radius:10px;border:1px solid var(--stroke);background:var(--bg2);color:var(--text);font:inherit;" />
+  </label>
+  <label>Song title
+    <input type="text" id="title-in" placeholder="e.g. Lose Yourself" autocomplete="off"
+      style="min-width:14rem;padding:0.45rem 0.65rem;border-radius:10px;border:1px solid var(--stroke);background:var(--bg2);color:var(--text);font:inherit;" />
+  </label>
+  <label>Exported song
+    <select id="song-select"><option value="">— None / load list —</option></select>
+  </label>
+  <button type="button" class="btn secondary" id="btn-load-list">Refresh exported songs</button>
+  <button type="button" class="btn" id="btn-run">Load reference + UltraSinger</button>
+</div>
+
+<div class="lyrics-compare-toolbar panel glass" style="padding:0.85rem 1rem;">
+  <span id="ai-settings-meta" style="color:var(--muted);font-size:0.82rem;align-self:center;">AI settings are loaded from Settings page.</span>
+  <button type="button" class="btn" id="btn-ai-run">Run AI replace</button>
+  <button type="button" class="btn secondary" id="btn-use-ai">Use AI text in save box</button>
+</div>
+<div id="global-msg" class="flash"></div>
+
+<div class="lyrics-compare-layout">
+  <section class="panel glass lyrics-pane">
+    <h2>Reference (databases)</h2>
+    <p class="pane-meta" id="ref-meta">Loaded from LRCLIB / lyrics.ovh / Shazam via Lyrics Compare backend.</p>
+    <div class="lyrics-source-tabs" id="source-tabs"></div>
+    <textarea id="ref-text" class="lyrics-body" readonly spellcheck="false" placeholder="Reference lyrics…"></textarea>
+  </section>
+  <section class="panel glass lyrics-pane">
+    <h2>UltraSinger (from file)</h2>
+    <p class="pane-meta" id="gen-meta">Default note lines loaded from selected song file.</p>
+    <textarea id="gen-text" class="lyrics-body" readonly spellcheck="false" placeholder="Original UltraSinger note lines…"></textarea>
+  </section>
+  <section class="panel glass lyrics-pane">
+    <h2>UltraSinger AI fixed</h2>
+    <p class="pane-meta" id="ai-meta">AI output appears here after running AI replace.</p>
+    <textarea id="ai-text" class="lyrics-body" spellcheck="false" placeholder="AI corrected one-note-per-line words…"></textarea>
+  </section>
+</div>
+
+<section class="panel glass lyrics-pane" style="margin-top:1rem;">
+  <h2>Save to file</h2>
+  <p class="pane-meta">One line per note. This writes to the selected song's UltraStar txt.</p>
+  <textarea id="fix-text" class="lyrics-body" spellcheck="true" placeholder="One syllable per line…"></textarea>
+  <div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+    <button type="button" class="btn" id="btn-save">Save corrections to UltraStar file</button>
+    <span id="save-msg" style="font-size:0.85rem;color:var(--muted);"></span>
+  </div>
+</section>
+
+<script>
+(function () {
+  const songSelect = document.getElementById('song-select');
+  const artistIn = document.getElementById('artist-in');
+  const titleIn = document.getElementById('title-in');
+  const refText = document.getElementById('ref-text');
+  const genText = document.getElementById('gen-text');
+  const aiText = document.getElementById('ai-text');
+  const fixText = document.getElementById('fix-text');
+  const globalMsg = document.getElementById('global-msg');
+  const saveMsg = document.getElementById('save-msg');
+  const refMeta = document.getElementById('ref-meta');
+  const genMeta = document.getElementById('gen-meta');
+  const aiMeta = document.getElementById('ai-meta');
+  const aiSettingsMeta = document.getElementById('ai-settings-meta');
+  const tabsEl = document.getElementById('source-tabs');
+
+  let allSongs = [];
+  let session = null;
+  let activeSourceIdx = 0;
+  let aiSettings = null;
+
+  function setFlash(text, cls) {
+    globalMsg.textContent = text || '';
+    globalMsg.className = 'flash' + (cls ? ' ' + cls : '');
+  }
+
+  function refLyricsForDisplay(src) {
+    if (!src) return '';
+    if (typeof src.lyrics_display === 'string') return src.lyrics_display;
+    return src.lyrics || '';
+  }
+
+  function renderTabs() {
+    tabsEl.innerHTML = '';
+    if (!session || !session.sources) return;
+    session.sources.forEach(function (src, i) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = src.source + (src.ok ? '' : ' (failed)');
+      b.disabled = !src.ok;
+      if (i === activeSourceIdx) b.classList.add('active');
+      b.addEventListener('click', function () {
+        if (!src.ok) return;
+        activeSourceIdx = i;
+        renderTabs();
+        refText.value = refLyricsForDisplay(src);
+        refMeta.textContent = 'Source: ' + src.source;
+      });
+      tabsEl.appendChild(b);
+    });
+  }
+
+  async function loadSongList() {
+    try {
+      const r = await fetch('/api/exported-songs');
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      allSongs = j.songs || [];
+      const v = songSelect.value;
+      songSelect.innerHTML = '<option value="">— None —</option>';
+      allSongs.forEach(function (s) {
+        const opt = document.createElement('option');
+        opt.value = s.path || '';
+        opt.textContent = (s.artist || '—') + ' — ' + (s.title || s.name || '—');
+        songSelect.appendChild(opt);
+      });
+      if (v && Array.from(songSelect.options).some(function (o) { return o.value === v; })) {
+        songSelect.value = v;
+      }
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  }
+
+  async function loadAiSettings() {
+    const r = await fetch('/api/settings');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText || 'Could not load settings');
+    const s = j.settings || {};
+    aiSettings = {
+      provider: String(s.ai_provider || 'openai').trim().toLowerCase() || 'openai',
+      model: String(s.ai_model || '').trim(),
+      api_key: String(s.ai_api_key || '').trim(),
+      base_url: String(s.ai_base_url || '').trim(),
+    };
+    aiSettingsMeta.textContent =
+      'AI settings from Settings: provider=' + aiSettings.provider +
+      ' · model=' + (aiSettings.model || '(not set)') +
+      ' · key=' + (aiSettings.api_key ? 'set' : 'missing');
+  }
+
+  songSelect.addEventListener('change', function () {
+    const p = songSelect.value;
+    const s = allSongs.find(function (x) { return x.path === p; });
+    if (!s) return;
+    if (s.artist) artistIn.value = s.artist;
+    if (s.title) titleIn.value = s.title;
+  });
+
+  document.getElementById('btn-run').addEventListener('click', async function () {
+    const path = songSelect.value.trim();
+    if (!path) {
+      setFlash('Select an exported song first.', 'err');
+      return;
+    }
+    setFlash('Loading...');
+    try {
+      const payload = { path: path };
+      if (artistIn.value.trim()) payload.artist = artistIn.value.trim();
+      if (titleIn.value.trim()) payload.title = titleIn.value.trim();
+      const r = await fetch('/api/lyrics-compare/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText || 'Load failed');
+      session = j;
+      activeSourceIdx = 0;
+      const firstOk = (j.sources || []).findIndex(function (s) { return s.ok; });
+      if (firstOk >= 0) activeSourceIdx = firstOk;
+      refText.value = j.sources && j.sources[activeSourceIdx] && j.sources[activeSourceIdx].ok
+        ? refLyricsForDisplay(j.sources[activeSourceIdx])
+        : '';
+      genText.value = j.generated_plain || '';
+      fixText.value = j.generated_plain || '';
+      aiText.value = j.generated_plain || '';
+      renderTabs();
+      refMeta.textContent = 'Source: ' + ((j.sources && j.sources[activeSourceIdx] && j.sources[activeSourceIdx].source) || 'none');
+      genMeta.textContent = 'Loaded original UltraSinger text (' + ((j.generated_words || []).length) + ' note slots).';
+      aiMeta.textContent = 'Loaded default UltraSinger text (' + ((j.generated_words || []).length) + ' note slots). Run AI replace to overwrite this pane.';
+      setFlash('Loaded. Run AI replace next.', 'ok');
+    } catch (e) {
+      session = null;
+      setFlash(e.message || String(e), 'err');
+    }
+  });
+
+  document.getElementById('btn-ai-run').addEventListener('click', async function () {
+    if (!session || !Array.isArray(session.generated_words) || !session.generated_words.length) {
+      setFlash('Load reference + UltraSinger first.', 'err');
+      return;
+    }
+    try {
+      await loadAiSettings(); // refresh just-in-time in case Settings changed after page load
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+      return;
+    }
+    if (!aiSettings) {
+      setFlash('AI settings are not loaded yet.', 'err');
+      return;
+    }
+    const model = aiSettings.model;
+    const key = aiSettings.api_key;
+    if (!model || !key) {
+      setFlash('Set AI model and API key in Settings first.', 'err');
+      return;
+    }
+    setFlash('Running AI replace...');
+    try {
+      const r = await fetch('/api/lyrics-compare/ai-replace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: aiSettings.provider,
+          model: model,
+          api_key: key,
+          base_url: aiSettings.base_url,
+          reference_text: refText.value,
+          generated_words: session.generated_words,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText || 'AI replace failed');
+      aiText.value = j.ai_plain || '';
+      aiMeta.textContent =
+        'AI provider: ' + j.provider + ' · model: ' + j.model + ' · words: ' + j.word_count +
+        (j.warning ? ' — ' + j.warning : '');
+      setFlash(j.warning ? 'AI replacement finished with a note: ' + j.warning : 'AI replacement complete.', j.warning ? 'warn' : 'ok');
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  });
+
+  document.getElementById('btn-use-ai').addEventListener('click', function () {
+    if (!aiText.value.trim()) {
+      setFlash('Run AI replace first.', 'err');
+      return;
+    }
+    fixText.value = aiText.value.replace(/\r\n/g, '\n');
+    setFlash('AI text copied to save box.', 'ok');
+  });
+
+  document.getElementById('btn-save').addEventListener('click', async function () {
+    if (!session || !session.path) {
+      setFlash('Load a song first.', 'err');
+      return;
+    }
+    saveMsg.textContent = '';
+    try {
+      const r = await fetch('/api/lyrics-compare/apply-words', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: session.path,
+          txt_path: session.txt_path,
+          plain_text: fixText.value.replace(/\r\n/g, '\n'),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText || 'Save failed');
+      session.generated_words = j.generated_words || [];
+      session.generated_plain = j.plain_after || '';
+      genText.value = session.generated_plain || '';
+      saveMsg.textContent = (j.warning || '') + ' Saved.';
+      saveMsg.style.color = j.warning ? 'var(--warn)' : 'var(--ok)';
+      setFlash('UltraStar file updated.', 'ok');
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  });
+
+  loadAiSettings().catch(function (e) {
+    setFlash(e.message || String(e), 'err');
+  });
+  loadSongList();
+})();
+</script>
+{% endblock %}
