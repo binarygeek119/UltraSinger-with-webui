@@ -110,6 +110,8 @@ app = FastAPI(title="UltraSinger WebUI", lifespan=lifespan)
 _static = Path(__file__).resolve().parent / "static"
 _static.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
+_assets = Path(__file__).resolve().parent.parent / "assets"
+app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
 app.include_router(api.router)
 app.include_router(pages.router)
