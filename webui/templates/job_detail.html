@@ -45,6 +45,7 @@ async function refresh() {
   ]);
   summary.innerHTML =
     '<strong>Title:</strong> ' + (jr.title || '') + '<br/>' +
+    '<strong>Artist:</strong> ' + (jr.artist || '—') + '<br/>' +
     '<strong>Source:</strong> ' + (jr.source || '') + '<br/>' +
     '<strong>Status:</strong> ' + (jr.status || '') + ' &nbsp; <strong>Stage:</strong> ' + (jr.stage || '') + '<br/>' +
     (jr.error ? '<strong>Error:</strong> ' + jr.error + '<br/>' : '');
@@ -54,7 +55,8 @@ async function refresh() {
 
   document.getElementById('btn-cancel').style.display =
     (jr.status === 'queued' || jr.status === 'running') ? 'inline-flex' : 'none';
-  document.getElementById('btn-retry').style.display = jr.status === 'failed' ? 'inline-flex' : 'none';
+  document.getElementById('btn-retry').style.display =
+    (jr.status === 'failed' || jr.status === 'completed') ? 'inline-flex' : 'none';
 
   logEl.textContent = lr.lines || '';
   if (autoscroll.checked && !userScrolled) {

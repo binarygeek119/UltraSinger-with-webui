@@ -58,6 +58,9 @@
 
   <h2>Default job</h2>
   <div class="checkbox-row"><input type="checkbox" name="yarg_mode" id="yarg_mode" /><label for="yarg_mode" style="margin:0;">YARG mode (omit <code>.mid</code>; txt/audio outputs unchanged)</label></div>
+  <label style="margin-top:0.65rem;">YouTube metadata: background screenshot time (% of video)</label>
+  <input type="number" name="youtube_bg_capture_percent" id="youtube_bg_capture_percent" min="0" max="100" step="1" />
+  <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;">Used only when queueing with “Use YouTube metadata only”. A frame is captured from the downloaded video at this percentage of total duration and saved as <code>* [BG].jpg</code> (default: 30).</p>
   <p style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;">When YARG mode is on, per-job and bulk ZIP downloads use the same flat names as YARG folder export (<code>guitar.*</code>, <code>background.*</code>, <code>notes.txt</code>, <code>album.*</code>) under each song folder; <code>.mid</code> is omitted from those ZIPs. When off, ZIPs keep normal UltraSinger paths (and optional album rename when “omit Instrumental/Vocals” is checked).</p>
   <div class="checkbox-row"><input type="checkbox" name="delete_workfiles_after_complete" id="delete_workfiles_after_complete" /><label for="delete_workfiles_after_complete" style="margin:0;">Delete Demucs/Whisper cache after success</label></div>
 
@@ -128,6 +131,7 @@ function buildSettingsBody(form) {
   }
   body.port = parseInt(body.port, 10);
   body.whisper_batch_size = parseInt(body.whisper_batch_size, 10);
+  body.youtube_bg_capture_percent = parseInt(body.youtube_bg_capture_percent, 10);
   body.job_retention_hours = parseInt(body.job_retention_hours, 10);
   body.cleanup_interval_hours = parseInt(body.cleanup_interval_hours, 10);
   return body;

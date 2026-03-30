@@ -32,6 +32,9 @@ fi
 echo "Installing UltraSinger + WebUI packages (optional extra: webui)..."
 uv pip install -e ".[webui]"
 
+echo "Updating yt-dlp to latest..."
+uv pip install -U yt-dlp
+
 echo "Verifying uvicorn..."
 ".venv/bin/python" -c "import uvicorn; print('uvicorn OK:', uvicorn.__version__)"
 

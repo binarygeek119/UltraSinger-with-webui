@@ -14,6 +14,7 @@
     <thead>
       <tr>
         <th>Title</th>
+        <th>Artist</th>
         <th>Source</th>
         <th>Status</th>
         <th>Stage</th>
@@ -44,6 +45,28 @@ function pill(st) {
   return '<span class="' + c + '">' + (st || '') + '</span>';
 }
 
+function escHtml(v) {
+  return String(v || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderSourceCell(x) {
+  const src = String(x.source || '');
+  const safeTitle = escHtml(src);
+  const safeText = escHtml(src);
+  const looksLikeUrl = /^https?:\/\//i.test(src);
+  if (looksLikeUrl) {
+    return '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeTitle + '">' +
+      '<a href="' + safeTitle + '" target="_blank" rel="noopener noreferrer">' + safeText + '</a></td>';
+  }
+  return '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeTitle + '">' +
+    safeText + '</td>';
+}
+
 async function loadJobs() {
   const r = await fetch('/api/jobs');
   const j = await r.json();
@@ -53,7 +76,7 @@ async function loadJobs() {
     if (x.status === 'queued' || x.status === 'running') {
       actions.push('<button class="btn secondary" data-act="cancel" data-id="' + x.job_id + '">Cancel</button>');
     }
-    if (x.status === 'failed') {
+    if (x.status === 'failed' || x.status === 'completed') {
       actions.push('<button class="btn secondary" data-act="retry" data-id="' + x.job_id + '">Retry</button>');
     }
     if (['completed', 'failed', 'cancelled'].indexOf(x.status) >= 0) {
@@ -61,12 +84,11 @@ async function loadJobs() {
     }
     actions.push('<a class="btn secondary" href="/jobs/' + x.job_id + '">Details</a>');
     return '<tr>' +
-      '<td>' + (x.title || '').replace(/</g, '&lt;') + '</td>' +
-      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' +
-        String(x.source || '').replace(/"/g, '&quot;') + '">' +
-        String(x.source || '').replace(/</g, '&lt;') + '</td>' +
+      '<td>' + escHtml(x.title || '') + '</td>' +
+      '<td>' + escHtml(x.artist || '—') + '</td>' +
+      renderSourceCell(x) +
       '<td>' + pill(x.status) + '</td>' +
-      '<td>' + String(x.stage || '—').replace(/</g, '&lt;') + '</td>' +
+      '<td>' + escHtml(x.stage || '—') + '</td>' +
       '<td style="font-size:0.82rem;color:var(--muted)">' + (x.started_at ? String(x.started_at).slice(0, 19).replace('T', ' ') : '—') + '</td>' +
       '<td>' + fmtDur(dur) + '</td>' +
       '<td style="white-space:nowrap">' + actions.join(' ') + '</td>' +

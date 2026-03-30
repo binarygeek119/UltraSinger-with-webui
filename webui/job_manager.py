@@ -146,6 +146,7 @@ class JobManager:
     def create_job(
         self,
         title: str,
+        artist: str,
         source: str,
         source_type: str,
         input_path: str,
@@ -158,6 +159,7 @@ class JobManager:
         job = {
             "job_id": job_id,
             "title": title,
+            "artist": artist,
             "source": source,
             "source_type": source_type,
             "input_path": input_path,
@@ -366,7 +368,10 @@ class JobManager:
     def retry_job(self, job_id: str) -> bool:
         with self._lock:
             j = self._jobs.get(job_id)
-            if not j or j.get("status") != JobStatus.FAILED.value:
+            if not j or j.get("status") not in (
+                JobStatus.FAILED.value,
+                JobStatus.COMPLETED.value,
+            ):
                 return False
             _clear_job_output_dir(self._cfg(), job_id)
             j["status"] = JobStatus.QUEUED.value

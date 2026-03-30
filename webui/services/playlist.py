@@ -7,8 +7,8 @@ from typing import Optional
 import yt_dlp
 
 
-def expand_playlist(url: str, cookiefile: Optional[str] = None) -> list[tuple[str, str]]:
-    """Return list of (watch_url, title_hint) for each entry."""
+def expand_playlist(url: str, cookiefile: Optional[str] = None) -> list[tuple[str, str, str]]:
+    """Return list of (watch_url, title_hint, artist_hint) for each entry."""
 
     opts: dict = {
         "quiet": True,
@@ -21,7 +21,7 @@ def expand_playlist(url: str, cookiefile: Optional[str] = None) -> list[tuple[st
     if cookiefile:
         opts["cookiefile"] = cookiefile
 
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str]] = []
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -46,10 +46,12 @@ def expand_playlist(url: str, cookiefile: Optional[str] = None) -> list[tuple[st
             u = entry_url(e)
             if u:
                 title = (e.get("title") or e.get("id") or u)[:200]
-                out.append((u, str(title)))
+                artist = str(e.get("channel") or e.get("uploader") or e.get("creator") or "").strip()
+                out.append((u, str(title), artist))
     else:
         u = info.get("webpage_url") or url
         title = info.get("title") or u
-        out.append((u, str(title)[:200]))
+        artist = str(info.get("channel") or info.get("uploader") or info.get("creator") or "").strip()
+        out.append((u, str(title)[:200], artist))
 
     return out

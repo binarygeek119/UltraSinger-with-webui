@@ -62,6 +62,7 @@ class WebUIConfig:
 
     # Default job
     yarg_mode: bool = False
+    youtube_bg_capture_percent: int = 30
     delete_workfiles_after_complete: bool = True
 
     # Storage / cleanup
@@ -121,6 +122,7 @@ def load_config() -> WebUIConfig:
             if hasattr(cfg, k):
                 setattr(cfg, k, v)
     _normalize_whisper_compute_type(cfg)
+    _normalize_percent_fields(cfg)
     _maybe_merge_export_folders_file(cfg)
     _apply_env_overrides(cfg)
     return cfg
@@ -130,6 +132,14 @@ def _normalize_whisper_compute_type(cfg: WebUIConfig) -> None:
     wct = (cfg.whisper_compute_type or "").strip()
     if wct not in WHISPER_COMPUTE_TYPE_VALUES:
         cfg.whisper_compute_type = ""
+
+
+def _normalize_percent_fields(cfg: WebUIConfig) -> None:
+    try:
+        pct = int(cfg.youtube_bg_capture_percent)
+    except (TypeError, ValueError):
+        pct = 30
+    cfg.youtube_bg_capture_percent = max(0, min(100, pct))
 
 
 def _export_folders_path(cfg: WebUIConfig) -> Path:

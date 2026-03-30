@@ -63,6 +63,15 @@ if errorlevel 1 (
 )
 
 echo.
+echo Updating yt-dlp to latest...
+"%VPY%" -m pip install -U yt-dlp
+if errorlevel 1 (
+  echo yt-dlp update failed.
+  pause
+  exit /b 1
+)
+
+echo.
 echo Verifying uvicorn...
 "%VPY%" -c "import uvicorn; print('uvicorn OK:', uvicorn.__version__)"
 if errorlevel 1 (

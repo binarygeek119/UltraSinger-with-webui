@@ -82,6 +82,14 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 
+echo Updating yt-dlp to latest...
+uv pip install -U yt-dlp
+if !errorlevel! neq 0 (
+    echo Error during yt-dlp update
+    pause
+    exit /b 1
+)
+
 echo Installing PyTorch with CUDA support (as recommended by WhisperX)...
 :: First remove any existing torch installation to avoid RECORD file issues
 uv pip uninstall torch torchvision torchaudio -y 2>nul

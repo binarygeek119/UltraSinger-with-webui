@@ -20,6 +20,7 @@ from webui.output_bundle import iter_job_output_files
 from webui.yarg_export import group_output_by_song_folder, plan_yarg_flat_copies
 
 log = logging.getLogger("ultrasinger.webui.worker")
+VIDEO_SUFFIXES = frozenset({".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"})
 
 STAGE_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"Downloading from YouTube|Downloading Video", re.I), "Downloading"),
@@ -91,6 +92,73 @@ def _augment_path(cfg: WebUIConfig) -> dict[str, str]:
         bin_dir = str(Path(ytd).resolve().parent)
         env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
     return env
+
+
+def _resolve_ff_tool(cfg: WebUIConfig, tool_name: str) -> Optional[str]:
+    tool_name = tool_name.lower()
+    user = (cfg.user_ffmpeg_path or "").strip()
+    names = (tool_name, f"{tool_name}.exe")
+    if user:
+        p = Path(user).expanduser()
+        if p.is_dir():
+            for n in names:
+                cand = p / n
+                if cand.is_file():
+                    return str(cand)
+        elif p.is_file():
+            low = p.name.lower()
+            if low in names:
+                return str(p)
+            sibling = p.with_name(tool_name + p.suffix)
+            if sibling.is_file():
+                return str(sibling)
+    from_path = shutil.which(tool_name)
+    if from_path:
+        return from_path
+    return None
+
+
+def _probe_video_duration_seconds(ffprobe_bin: str, video_path: Path) -> Optional[float]:
+    cmd = [
+        ffprobe_bin,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(video_path),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+    if res.returncode != 0:
+        return None
+    try:
+        dur = float((res.stdout or "").strip())
+    except (TypeError, ValueError):
+        return None
+    return dur if dur > 0 else None
+
+
+def _upsert_background_tag(txt_path: Path, bg_filename: str) -> None:
+    raw = txt_path.read_text(encoding="utf-8", errors="replace")
+    lines = raw.splitlines()
+    tag = f"#BACKGROUND:{bg_filename}"
+
+    for i, line in enumerate(lines):
+        if line.startswith("#BACKGROUND:"):
+            lines[i] = tag
+            txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+            return
+
+    note_markers = (":", "*", "F", "R", "G", "-", "E")
+    insert_at = len(lines)
+    for i, line in enumerate(lines):
+        if line and line[0] in note_markers:
+            insert_at = i
+            break
+
+    lines.insert(insert_at, tag)
+    txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 
 class WorkerService:
@@ -192,8 +260,75 @@ class WorkerService:
         if ok and cfg.delete_workfiles_after_complete:
             self._cleanup_job_cache(out)
         if ok:
+            self._capture_youtube_background_if_needed(cfg, job, out)
             self._copy_yarg_export_folder(cfg, job_id, out)
             self._copy_ultrastar_export_folder(cfg, job_id, out)
+
+    def _capture_youtube_background_if_needed(
+        self,
+        cfg: WebUIConfig,
+        job: dict,
+        output_root: Path,
+    ) -> None:
+        if not job.get("youtube_metadata"):
+            return
+
+        ffmpeg_bin = _resolve_ff_tool(cfg, "ffmpeg")
+        ffprobe_bin = _resolve_ff_tool(cfg, "ffprobe")
+        if not ffmpeg_bin or not ffprobe_bin:
+            log.info("Skipping YouTube background screenshot: ffmpeg/ffprobe not available")
+            return
+
+        try:
+            pct_raw = int(getattr(cfg, "youtube_bg_capture_percent", 30) or 30)
+        except (TypeError, ValueError):
+            pct_raw = 30
+        pct = max(0, min(100, pct_raw))
+        song_dirs = [p for p in output_root.iterdir() if p.is_dir()]
+        for song_dir in song_dirs:
+            txt_files = sorted(song_dir.glob("*.txt"))
+            if not txt_files:
+                continue
+            preferred_txt = next((p for p in txt_files if p.stem == song_dir.name), txt_files[0])
+            base_name = preferred_txt.stem
+
+            videos = [p for p in song_dir.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_SUFFIXES]
+            if not videos:
+                continue
+            video = next((p for p in videos if p.stem == base_name), videos[0])
+
+            dur = _probe_video_duration_seconds(ffprobe_bin, video)
+            if not dur:
+                continue
+            t = max(0.0, min(dur - 0.1, dur * (pct / 100.0)))
+            bg_path = song_dir / f"{base_name} [BG].jpg"
+
+            cmd = [
+                ffmpeg_bin,
+                "-y",
+                "-ss",
+                f"{t:.3f}",
+                "-i",
+                str(video),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "2",
+                str(bg_path),
+            ]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            except subprocess.TimeoutExpired:
+                log.warning("Background screenshot timed out for %s", song_dir)
+                continue
+            if res.returncode != 0 or not bg_path.is_file():
+                log.warning("Background screenshot failed for %s", song_dir)
+                continue
+
+            try:
+                _upsert_background_tag(preferred_txt, bg_path.name)
+            except OSError as e:
+                log.warning("Could not update BACKGROUND tag in %s: %s", preferred_txt, e)
 
     def _copy_song_bundle_export(
         self,

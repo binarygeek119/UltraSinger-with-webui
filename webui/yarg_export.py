@@ -24,6 +24,11 @@ def _suffix(name: str) -> str:
     return Path(name).suffix.lower()
 
 
+def _is_bg_image_name(name: str) -> bool:
+    stem = _stem(name)
+    return stem.endswith(" [BG]") or "[BG]" in stem
+
+
 def plan_yarg_flat_copies(
     items: list[tuple[Path, str]],
     song_folder_name: str,
@@ -71,11 +76,18 @@ def plan_yarg_flat_copies(
         out.append((pick[0], "notes.txt"))
 
     # background.<ext>
+    # Include both media types when present:
+    # - video as background.<video_ext>
+    # - generated BG image (* [BG].jpg / [BG].*) as background.<image_ext>
     if by_vid:
-        pick = prefer_stem_match(by_vid, song_folder_name)
-        if not pick:
-            pick = sorted(by_vid, key=lambda x: x[1].lower())[0]
-        out.append((pick[0], f"background{_suffix(pick[1])}"))
+        pick_vid = prefer_stem_match(by_vid, song_folder_name)
+        if not pick_vid:
+            pick_vid = sorted(by_vid, key=lambda x: x[1].lower())[0]
+        out.append((pick_vid[0], f"background{_suffix(pick_vid[1])}"))
+
+    bg_img = next((x for x in by_img if _is_bg_image_name(x[1])), None)
+    if bg_img:
+        out.append((bg_img[0], f"background{_suffix(bg_img[1])}"))
 
     # album.<ext>
     if by_img:

@@ -29,9 +29,29 @@ def _youtube_ydl_base_opts(cookiefile: str | None) -> dict[str, Any]:
     return opts
 
 
-def get_youtube_title(url: str, cookiefile: str = None) -> tuple[str, str]:
-    """Get the title of the YouTube video"""
+def _extract_youtube_channel_and_title(url: str, cookiefile: str = None) -> tuple[str, str]:
+    """Get channel/uploader name + video title from YouTube metadata."""
+    ydl_opts = _youtube_ydl_base_opts(cookiefile)
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.extract_info(
+            url, download=False  # We just want to extract the info
+        )
+    channel = (
+        str(result.get("channel") or "").strip()
+        or str(result.get("uploader") or "").strip()
+        or str(result.get("creator") or "").strip()
+        or str(result.get("artist") or "").strip()
+    )
+    title = str(result.get("title") or "").strip()
+    if not channel:
+        channel = "Unknown Artist"
+    if not title:
+        title = url
+    return channel, title
 
+
+def get_youtube_title(url: str, cookiefile: str = None) -> tuple[str, str]:
+    """Get artist/title pair for UltraSinger processing."""
     ydl_opts = _youtube_ydl_base_opts(cookiefile)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         result = ydl.extract_info(
@@ -42,7 +62,7 @@ def get_youtube_title(url: str, cookiefile: str = None) -> tuple[str, str]:
         return result["artist"].strip(), result["track"].strip()
     if "-" in result["title"]:
         return result["title"].split("-")[0].strip(), result["title"].split("-")[1].strip()
-    return result["channel"].strip(), result["title"].strip()
+    return _extract_youtube_channel_and_title(url, cookiefile)
 
 
 def __download_youtube_video_with_audio(url: str, clear_filename: str, output_path: str, cookiefile: str = None) -> str:
@@ -106,12 +126,12 @@ def download_from_youtube(
     use_youtube_metadata: bool = False,
 ) -> tuple[str, str, str, MediaInfo]:
     """Download from YouTube"""
-    (artist, title) = get_youtube_title(input_url, cookiefile)
-
     if use_youtube_metadata:
         print(f"{ULTRASINGER_HEAD} Using YouTube metadata (skipping MusicBrainz)")
+        (artist, title) = _extract_youtube_channel_and_title(input_url, cookiefile)
         song_info = SongInfo(title=title, artist=artist)
     else:
+        (artist, title) = get_youtube_title(input_url, cookiefile)
         song_info = search_musicbrainz(title, artist)
 
     basename_without_ext = sanitize_filename(f"{song_info.artist} - {song_info.title}")

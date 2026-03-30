@@ -91,7 +91,7 @@ async def api_submit_url(
         raise HTTPException(400, "URL must start with http:// or https://")
     cfg = load_config()
     t = title.strip() or u
-    job = job_manager.create_job(t, u, "url", u, cookiefile=cfg.cookiefile or None)
+    job = job_manager.create_job(t, "", u, "url", u, cookiefile=cfg.cookiefile or None)
     return {"job": job}
 
 
@@ -110,9 +110,9 @@ async def api_submit_playlist(url: str = Form(...)) -> dict[str, Any]:
     if not items:
         raise HTTPException(400, "No entries found in playlist")
     jobs = []
-    for watch_url, hint in items:
+    for watch_url, hint, _artist in items:
         jobs.append(
-            job_manager.create_job(hint, watch_url, "youtube", watch_url, cookiefile=cf)
+            job_manager.create_job(hint, "", watch_url, "youtube", watch_url, cookiefile=cf)
         )
     return {"count": len(jobs), "jobs": jobs}
 
@@ -136,20 +136,22 @@ async def api_submit_from_url(
     cfg = load_config()
     cf = cfg.cookiefile.strip() or None
     use_yt_meta = _form_truthy(youtube_metadata)
-    items: list[tuple[str, str]] = []
+    items: list[tuple[str, str, str]] = []
     try:
         items = expand_playlist(u, cf)
     except Exception:
         log.debug("expand_playlist failed; using direct URL", exc_info=True)
     if not items:
-        items = [(u, title.strip() or u)]
+        items = [(u, title.strip() or u, "")]
     custom = title.strip()
     jobs = []
-    for watch_url, hint in items:
+    for watch_url, hint, artist_hint in items:
         job_title = custom if len(items) == 1 and custom else hint
+        job_artist = artist_hint.strip() if use_yt_meta else ""
         jobs.append(
             job_manager.create_job(
                 job_title,
+                job_artist,
                 watch_url,
                 "url",
                 watch_url,
@@ -169,6 +171,7 @@ async def api_upload(
     cfg = load_config()
     job = job_manager.create_job(
         file.filename,
+        "",
         file.filename,
         "upload",
         "",

@@ -28,6 +28,9 @@ uv --version
 echo "Syncing dependencies with uv..."
 uv sync --extra macos
 
+echo "Updating yt-dlp to latest..."
+uv pip install -U yt-dlp
+
 echo "Installation completed successfully!"
 echo "To run UltraSinger:"
 echo "  source .venv/bin/activate"

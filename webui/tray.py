@@ -22,7 +22,8 @@ except ImportError:
 
 
 def _static_icon_ico() -> Path:
-    return Path(__file__).resolve().parent / "static" / "icon.ico"
+    root = Path(__file__).resolve().parent.parent
+    return root / "assets" / "icon.ico"
 
 
 def _icon_image() -> "Image.Image":

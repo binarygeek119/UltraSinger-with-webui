@@ -3,6 +3,10 @@ setlocal
 cd /d "%~dp0"
 set "ROOT=%CD%"
 set "VPY=%ROOT%\.venv\Scripts\python.exe"
+set "HIDDEN=0"
+
+if /I "%~1"=="--hidden" set "HIDDEN=1"
+if /I "%~1"=="/hidden" set "HIDDEN=1"
 
 if not exist "%VPY%" (
   echo No virtual environment found. Run install_webui.bat in this folder first.
@@ -24,6 +28,12 @@ if errorlevel 1 (
 
 call .venv\Scripts\activate.bat
 set "PYTHONPATH=%CD%"
+if "%HIDDEN%"=="1" (
+  echo Starting UltraSinger WebUI in hidden mode...
+  start "" powershell -NoProfile -WindowStyle Hidden -Command "$env:PYTHONPATH='%PYTHONPATH%'; & '%VPY%' -m webui"
+  exit /b 0
+)
+
 echo Starting UltraSinger WebUI ^(repository root: %CD%^) ...
 "%VPY%" -m webui
 if errorlevel 1 pause

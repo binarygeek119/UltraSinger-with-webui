@@ -29,6 +29,10 @@ uv --version
 echo "Syncing dependencies from pyproject.toml..."
 uv sync --extra linux
 
+# Keep extractor current for YouTube changes.
+echo "Updating yt-dlp to latest..."
+uv pip install -U yt-dlp
+
 # Install PyTorch with CUDA support
 echo "Installing PyTorch with CUDA support..."
 uv pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128 --force-reinstall

@@ -110,7 +110,7 @@ Linux/macOS convenience scripts:
 
 **Run**
 
-* **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` (and on Linux/macOS: `start_ultrasinger_webui_linux.sh` / `start_ultrasinger_webui_macos.command`) if `.venv` exists in the repo root.
+* **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` (or `start_ultrasinger_webui.bat --hidden` to run without a visible terminal). On Linux/macOS use `start_ultrasinger_webui_linux.sh` / `start_ultrasinger_webui_macos.command` if `.venv` exists in the repo root.
 * **Tray:** set `tray_enabled` to `true` in `data/webui_config.json` (or use the Settings page), then start with `python -m webui` again.
 
 Configuration and job data live under `data/` (for example `webui_config.json`, `jobs/`). See the `webui/` package for implementation details.
@@ -129,6 +129,7 @@ Settings are edited in the browser (**Settings** page) and stored in `data/webui
 | | Whisper model, compute type, batch size | Compute type is a dropdown (CTranslate2 / faster-whisper values); empty = UltraSinger default (float16 on CUDA, int8 on CPU). |
 | | Demucs model, FFmpeg path, yt-dlp PATH | Extra directory for `yt-dlp` on `PATH`. |
 | **Home (queue from URL)** | Use YouTube metadata only | Per queue action: skips MusicBrainz for that job; uses yt-dlp title/artist for folder names and tags. |
+| | YouTube metadata background screenshot time (%) | When metadata-only mode is used, captures one frame from the downloaded video at this % of total duration and writes `*[BG].jpg` (also updates `#BACKGROUND` in the UltraStar txt). Default: `30`. |
 | **yt-dlp cookies** | Paste or file path | Netscape `cookies.txt`; saved under data when pasted. |
 | **Default job** | YARG mode | Omits writing `.mid` for WebUI jobs **unless** UltraStar folder export is enabled with a path (see below). With YARG mode on, **ZIP** downloads (per job and bulk) use the same **export-folder-style** names inside each song folder (`guitar.*`, `background.*`, `notes.txt`, `album.*`; no `.mid` in the archive). |
 | | Delete Demucs/Whisper cache after success | UltraSinger `--keep_cache` is omitted when this is on. |
