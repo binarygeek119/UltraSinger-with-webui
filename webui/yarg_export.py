@@ -6,6 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from webui.output_bundle import iter_job_output_files
+from webui.ultrasinger_tag import TAG_FILENAME
 
 VIDEO_SUFFIXES = frozenset({".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"})
 IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"})
@@ -109,6 +110,10 @@ def plan_yarg_flat_copies(
                 non_vocals = [x for x in by_aud if "[Vocals]" not in x[1]]
                 pick = non_vocals[0] if non_vocals else by_aud[0]
         out.append((pick[0], f"guitar{_suffix(pick[1])}"))
+
+    tag_item = next((x for x in items if _basename_only(x[1]).lower() == TAG_FILENAME.lower()), None)
+    if tag_item:
+        out.append((tag_item[0], TAG_FILENAME))
 
     # Deduplicate by src (same file must not map to two roles)
     seen_src: set[Path] = set()

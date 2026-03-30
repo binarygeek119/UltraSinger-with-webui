@@ -21,6 +21,7 @@ from webui.job_manager import JobStatus, job_manager
 from webui.output_bundle import iter_job_output_files
 from webui.yarg_export import build_yarg_zip_album_arc_overrides, iter_yarg_export_style_zip_entries
 from webui.services.playlist import expand_playlist
+from webui.ultrasinger_tag import file_sha256, read_prior_song_version_from_song_dir
 from webui.zip_naming import (
     logical_root_for_job_output,
     per_job_zip_download_filename,
@@ -198,6 +199,7 @@ async def api_exported_songs_reprocess(request: Request) -> dict[str, Any]:
     artist = str(row.get("artist") or "")
     video_url = str(row.get("video_url") or "")
     audio_path = str(row.get("audio_path") or "")
+    prior_ver = read_prior_song_version_from_song_dir(song_dir)
 
     if video_url:
         job = job_manager.create_job(
@@ -208,9 +210,17 @@ async def api_exported_songs_reprocess(request: Request) -> dict[str, Any]:
             video_url,
             cookiefile=cfg.cookiefile.strip() or None,
             youtube_metadata=True,
+            tag_prior_song_version=prior_ver,
         )
         return {"ok": True, "mode": "youtube", "job": job}
     if audio_path:
+        ap = Path(audio_path)
+        up_hash: str | None = None
+        try:
+            if ap.is_file():
+                up_hash = file_sha256(ap)
+        except OSError:
+            up_hash = None
         job = job_manager.create_job(
             title,
             artist,
@@ -219,6 +229,8 @@ async def api_exported_songs_reprocess(request: Request) -> dict[str, Any]:
             audio_path,
             cookiefile=None,
             youtube_metadata=False,
+            tag_prior_song_version=prior_ver,
+            tag_upload_file_hash=up_hash,
         )
         return {"ok": True, "mode": "audio", "job": job}
 
@@ -238,6 +250,14 @@ def api_exported_songs_reprocess_all() -> dict[str, Any]:
         artist = str(row.get("artist") or "").strip()
         video_url = str(row.get("video_url") or "").strip()
         audio_path = str(row.get("audio_path") or "").strip()
+        song_dir: Path | None = None
+        try:
+            raw_path = str(row.get("path") or "").strip()
+            if raw_path:
+                song_dir = Path(raw_path).expanduser().resolve()
+        except OSError:
+            song_dir = None
+        prior_ver = read_prior_song_version_from_song_dir(song_dir) if song_dir and song_dir.is_dir() else None
 
         try:
             if video_url:
@@ -249,10 +269,18 @@ def api_exported_songs_reprocess_all() -> dict[str, Any]:
                     video_url,
                     cookiefile=cfg.cookiefile.strip() or None,
                     youtube_metadata=True,
+                    tag_prior_song_version=prior_ver,
                 )
                 queued += 1
                 continue
             if audio_path:
+                ap = Path(audio_path)
+                up_hash: str | None = None
+                try:
+                    if ap.is_file():
+                        up_hash = file_sha256(ap)
+                except OSError:
+                    up_hash = None
                 job_manager.create_job(
                     title,
                     artist,
@@ -261,6 +289,8 @@ def api_exported_songs_reprocess_all() -> dict[str, Any]:
                     audio_path,
                     cookiefile=None,
                     youtube_metadata=False,
+                    tag_prior_song_version=prior_ver,
+                    tag_upload_file_hash=up_hash,
                 )
                 queued += 1
                 continue
@@ -471,6 +501,10 @@ async def api_upload(
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
     job["input_path"] = str(dest.resolve())
+    try:
+        job["tag_upload_file_hash"] = file_sha256(dest)
+    except OSError:
+        pass
     job_manager.persist_job(job)
     return {"job": job}
 

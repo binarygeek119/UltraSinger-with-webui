@@ -3,7 +3,12 @@
 <h1>Exported Songs</h1>
 <div class="row panel glass" style="margin-bottom:1rem;padding:0.85rem 1rem;">
   <button type="button" class="btn secondary" id="btn-refresh">Refresh list</button>
-  <button type="button" class="btn secondary" id="btn-reprocess-all">Reprocess all songs</button>
+  <button
+    type="button"
+    class="btn"
+    id="btn-reprocess-all"
+    title="Queue a job for every exported song that has a YouTube URL or a local audio file"
+  >Reprocess all songs</button>
   <input type="text" id="song-search" placeholder="Search songs..." style="max-width:22rem;" />
   <span id="count" style="color:var(--muted);font-size:0.9rem;align-self:center;">0 songs</span>
 </div>
@@ -18,7 +23,7 @@
         <th>Type</th>
         <th>Folder</th>
         <th>Files</th>
-        <th></th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -75,9 +80,18 @@ function renderSongs() {
   countEl.textContent = songs.length + ' song' + (songs.length === 1 ? '' : 's');
   tbody.innerHTML = songs.map(function (x) {
       const canReprocess = x.reprocess_mode === 'youtube' || x.reprocess_mode === 'audio';
+      const reprocessTitle =
+        x.reprocess_mode === 'youtube'
+          ? 'Redownload from source URL and reprocess'
+          : x.reprocess_mode === 'audio'
+            ? 'Reprocess using local audio file'
+            : '';
       const action = canReprocess
-        ? '<button type="button" class="btn secondary" data-act="reprocess" data-path="' + escHtml(x.path || '') + '" style="white-space:normal;">' +
-          (x.reprocess_mode === 'youtube' ? 'Redownload + Reprocess' : 'Reprocess Audio') + '</button>'
+        ? '<button type="button" class="btn secondary" data-act="reprocess" data-path="' +
+          escHtml(x.path || '') +
+          '" title="' +
+          escHtml(reprocessTitle) +
+          '" style="white-space:normal;">Reprocess song</button>'
         : '<span style="color:var(--muted)">—</span>';
       return '<tr>' +
         '<td>' + escHtml(x.artist || '—') + '</td>' +

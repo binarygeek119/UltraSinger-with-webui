@@ -65,6 +65,15 @@ def page_exported_songs(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/lyrics-compare", response_class=HTMLResponse)
+def page_lyrics_compare(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request,
+        "lyrics_compare.html",
+        {"title": "Lyrics compare", "webui_version": __version__},
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(

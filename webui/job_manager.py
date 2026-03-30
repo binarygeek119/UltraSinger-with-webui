@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from webui.config import WebUIConfig, ensure_data_layout, load_config
+from webui.ultrasinger_tag import read_prior_song_version_from_job_output
 
 log = logging.getLogger("ultrasinger.webui.jobs")
 
@@ -188,6 +189,8 @@ class JobManager:
         input_path: str,
         cookiefile: Optional[str] = None,
         youtube_metadata: bool = False,
+        tag_prior_song_version: Optional[str] = None,
+        tag_upload_file_hash: Optional[str] = None,
     ) -> dict[str, Any]:
         cfg = self._cfg()
         ensure_data_layout(cfg)
@@ -201,6 +204,8 @@ class JobManager:
             "input_path": input_path,
             "cookiefile": cookiefile,
             "youtube_metadata": bool(youtube_metadata),
+            "tag_prior_song_version": tag_prior_song_version,
+            "tag_upload_file_hash": tag_upload_file_hash,
             "status": JobStatus.QUEUED.value,
             "stage": "Queued",
             "created_at": _now_iso(),
@@ -409,13 +414,23 @@ class JobManager:
                 JobStatus.COMPLETED.value,
             ):
                 return False
-            _clear_job_output_dir(self._cfg(), job_id)
+            cfg = self._cfg()
+            prior_tag_ver = read_prior_song_version_from_job_output(cfg.jobs_dir(), job_id)
+            _clear_job_output_dir(cfg, job_id)
             j["status"] = JobStatus.QUEUED.value
             j["stage"] = "Queued"
             j["started_at"] = None
             j["completed_at"] = None
             j["duration_seconds"] = None
             j["error"] = None
+            j["tag_prior_song_version"] = prior_tag_ver
+            if j.get("source_type") == "upload" and (j.get("input_path") or "").strip():
+                try:
+                    from webui.ultrasinger_tag import file_sha256
+
+                    j["tag_upload_file_hash"] = file_sha256(Path(str(j["input_path"]).strip()))
+                except OSError:
+                    pass
             self._queue.append(job_id)
             self._save_job(j)
         self.append_history(job_id, "retry")

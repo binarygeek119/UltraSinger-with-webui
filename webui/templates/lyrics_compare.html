@@ -1,0 +1,819 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Lyrics compare</h1>
+<p style="color:var(--muted);max-width:46rem;margin:-0.5rem 0 1rem;">
+  Enter <strong>artist</strong> and <strong>song title</strong> to look up lyrics online (LRCLIB, lyrics.ovh, and Shazam track pages), and optionally pick an
+  exported song to compare with your UltraStar / YARG <code>notes.txt</code>. The <strong>UltraSinger</strong> column merges multi-note syllables into <strong>one line per melisma run</strong> (using <code>~</code> in the file to decide where each run ends); <strong>each note is separated by a space</strong> in that view, and a trailing <code>~</code> becomes an extra space. The file and the correction box stay <strong>one line per note</strong> and keep <code>~</code> as stored.
+  <strong>Reference</strong> does the same for trailing tildes in the view only.
+  <strong>Reference chips:</strong> chips are always <strong>one word per button</strong> (newlines are treated as whitespace). Chips are <strong>aligned</strong> to the matching UltraSinger note/run (skipping letter-spellings like <code>a</code>+<code>n</code>+<code>d</code> so <code>And</code> maps to the real word later in the file). Saving writes corrections back to the note file.
+</p>
+
+<div class="lyrics-compare-toolbar panel glass" style="padding:0.85rem 1rem;">
+  <label>Artist
+    <input type="text" id="artist-in" placeholder="e.g. Queen" autocomplete="off"
+      style="min-width:11rem;padding:0.45rem 0.65rem;border-radius:10px;border:1px solid var(--stroke);background:var(--bg2);color:var(--text);font:inherit;" />
+  </label>
+  <label>Song title
+    <input type="text" id="title-in" placeholder="e.g. Bohemian Rhapsody" autocomplete="off"
+      style="min-width:14rem;padding:0.45rem 0.65rem;border-radius:10px;border:1px solid var(--stroke);background:var(--bg2);color:var(--text);font:inherit;" />
+  </label>
+  <button type="button" class="btn secondary" id="btn-lookup-remote">Lookup lyrics online</button>
+  <label>Exported song (optional for compare / save)
+    <select id="song-select"><option value="">— None / load list —</option></select>
+  </label>
+  <button type="button" class="btn secondary" id="btn-load-list">Refresh exported songs</button>
+  <button type="button" class="btn" id="btn-run">Load comparison</button>
+</div>
+<div id="global-msg" class="flash"></div>
+
+<div class="lyrics-compare-layout">
+  <section class="panel glass lyrics-pane">
+    <h2>Reference (databases)</h2>
+    <p class="pane-meta" id="ref-meta">Fetch results appear after “Load comparison”. Chips are tinted green when they match the merged UltraSinger syllable, red when they differ (case-insensitive; trailing ~ ignored). Click a word to set that syllable. Custom paste below updates the clickable words.</p>
+    <div class="lyrics-source-tabs" id="source-tabs"></div>
+    <textarea id="ref-text" class="lyrics-ref-hidden-store" readonly spellcheck="false" aria-hidden="true" tabindex="-1"></textarea>
+    <div id="ref-clickable" class="ref-word-tray" role="group" aria-label="Reference words, click to apply syllable"></div>
+    <label style="display:block;margin-top:0.75rem;font-size:0.82rem;color:var(--muted);">Custom reference (optional paste — overrides tab selection for display only)
+      <textarea id="ref-custom" class="lyrics-body" style="min-height:120px;margin-top:0.35rem;" spellcheck="false" placeholder="Paste lyrics from any source…"></textarea>
+    </label>
+  </section>
+
+  <section class="panel glass lyrics-pane">
+    <h2>UltraSinger (from file)</h2>
+    <p class="pane-meta" id="gen-meta"></p>
+    <textarea id="gen-text" class="lyrics-body" readonly spellcheck="false" placeholder="Merged syllables for reading; file still one line per note…"></textarea>
+    <p class="pane-meta" style="margin-top:0.55rem;">UltraSinger chips (click a changed chip to undo that run back to file baseline).</p>
+    <div id="gen-clickable" class="gen-word-tray" role="group" aria-label="UltraSinger merged syllable chips"></div>
+  </section>
+</div>
+
+<section class="panel glass lyrics-pane" style="margin-top:1rem;">
+  <h2>Corrections → save to file</h2>
+  <p class="pane-meta">
+    <strong>One line per syllable</strong> (same order as UltraSinger). Extra/missing lines vs. note count only updates the overlapping prefix. Include <code>~</code> on a line if you want it saved.
+    <button type="button" class="btn secondary" id="btn-copy-ref" style="margin-left:0.5rem;">Copy reference (one word per line)</button>
+    <button type="button" class="btn secondary" id="btn-copy-gen" style="margin-left:0.35rem;">Copy UltraSinger lines</button>
+    <button type="button" class="btn secondary" id="btn-reset-gen" style="margin-left:0.35rem;">Reset to UltraSinger text</button>
+  </p>
+  <textarea id="fix-text" class="lyrics-body" spellcheck="true" placeholder="One syllable per line…"></textarea>
+  <div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+    <button type="button" class="btn" id="btn-save">Save corrections to UltraStar file</button>
+    <span id="save-msg" style="font-size:0.85rem;color:var(--muted);"></span>
+  </div>
+</section>
+
+<script>
+(function () {
+  const songSelect = document.getElementById('song-select');
+  const artistIn = document.getElementById('artist-in');
+  const titleIn = document.getElementById('title-in');
+  const globalMsg = document.getElementById('global-msg');
+  const refMeta = document.getElementById('ref-meta');
+  const genMeta = document.getElementById('gen-meta');
+  const refText = document.getElementById('ref-text');
+  const refCustom = document.getElementById('ref-custom');
+  const genText = document.getElementById('gen-text');
+  const genClickable = document.getElementById('gen-clickable');
+  const fixText = document.getElementById('fix-text');
+  const tabsEl = document.getElementById('source-tabs');
+  const saveMsg = document.getElementById('save-msg');
+
+  let allSongs = [];
+  let session = null;
+  let activeSourceIdx = 0;
+  const sourcesData = [];
+  const REF_CHIP_HINT =
+    ' Chips: one word per button; each chip maps to the matching UltraSinger note/run (not just “chip N → row N”). Green/red uses that row.';
+
+  function setFlash(text, cls) {
+    globalMsg.textContent = text || '';
+    globalMsg.className = 'flash' + (cls ? ' ' + cls : '');
+  }
+
+  async function loadSongList() {
+    setFlash('');
+    try {
+      const r = await fetch('/api/exported-songs');
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      allSongs = j.songs || [];
+      const v = songSelect.value;
+      songSelect.innerHTML = '<option value="">— None —</option>';
+      allSongs.forEach(function (s) {
+        const opt = document.createElement('option');
+        opt.value = s.path || '';
+        opt.textContent = (s.artist || '—') + ' — ' + (s.title || s.name || '—') + ' (' + (s.type || '') + ')';
+        songSelect.appendChild(opt);
+      });
+      if (v && Array.from(songSelect.options).some(function (o) { return o.value === v; })) {
+        songSelect.value = v;
+      }
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  }
+
+  function visibleReference() {
+    const c = refCustom.value.trim();
+    if (c) return refCustom.value;
+    return refText.value || '';
+  }
+
+  function effectiveRefString() {
+    return visibleReference();
+  }
+
+  /** Same trailing-tilde strip as server `strip_ultrastar_compare_tilde` (for chip vs merged UltraSinger compare). */
+  function normalizeTokenForLyricCompare(s) {
+    if (s == null || s === '') return '';
+    var t = String(s).trim();
+    t = t.replace(/(?:[~～〜]|\u301C)+\s*$/u, '');
+    return t.trim().toLowerCase();
+  }
+
+  /** View-only formatting for UltraSinger side: trailing melisma tildes become one space. */
+  function ultraSingerViewToken(s) {
+    if (s == null || s === '') return '';
+    var t = String(s).trim();
+    t = t.replace(/(?:[~～〜]|\u301C)+\s*$/u, '');
+    return t ? (t + ' ') : '';
+  }
+
+  function ultraSingerViewTextFromWords(wordsArr) {
+    return (wordsArr || [])
+      .map(function (w) { return ultraSingerViewToken(w); })
+      .filter(function (w) { return String(w || '').trim() !== ''; })
+      .join('\n');
+  }
+
+  function visibleUltraSingerWordIndices(wordsArr) {
+    const out = [];
+    (wordsArr || []).forEach(function (w, i) {
+      if (String(ultraSingerViewToken(w) || '').trim() !== '') out.push(i);
+    });
+    return out;
+  }
+
+  /** Merged view inserts spaces between notes; compare ref word to compacted UltraSinger text too (e.g. hea+ven → heaven). */
+  function mergedDisplayMatchesRefToken(displayStr, refNormalized) {
+    var d = displayStr != null ? String(displayStr) : '';
+    if (normalizeTokenForLyricCompare(d) === refNormalized) return true;
+    var compact = normalizeTokenForLyricCompare(d.replace(/\s+/g, ''));
+    return compact === refNormalized;
+  }
+
+  /** Whole chip (incl. multi-word lyric lines) vs merged run: compare whitespace-stripped compact forms. */
+  function chipTextMatchesDisplay(refChipText, displayStr) {
+    var rc = normalizeTokenForLyricCompare(String(refChipText || '').replace(/\s+/g, ''));
+    var dc = normalizeTokenForLyricCompare(String(displayStr || '').replace(/\s+/g, ''));
+    if (rc && dc && rc === dc) return true;
+    var first = normalizeTokenForLyricCompare((refChipText || '').trim().split(/\s+/)[0] || '');
+    return mergedDisplayMatchesRefToken(displayStr, first);
+  }
+
+  function noteLineCount() {
+    const sw = session && session.generated_words && session.generated_words.length;
+    if (sw) return sw;
+    const g = genText.value.replace(/\r\n/g, '\n').split('\n');
+    while (g.length > 0 && g[g.length - 1] === '') g.pop();
+    return g.length;
+  }
+
+  function maxSyllableSlots() {
+    if (session && session.baseSyllableCount) return session.baseSyllableCount;
+    if (session && session.generated_words && session.generated_words.length) {
+      return session.generated_words.length;
+    }
+    return noteLineCount();
+  }
+
+  function syllableRunCount() {
+    if (session && session.syllable_runs && session.syllable_runs.length) {
+      return session.syllable_runs.length;
+    }
+    return maxSyllableSlots();
+  }
+
+  function updateGenMeta() {
+    if (!session || !session.txt_path) {
+      genMeta.textContent = '';
+      return;
+    }
+    const notes = maxSyllableSlots();
+    const lines = syllableRunCount();
+    genMeta.textContent =
+      session.txt_path +
+      ' · ' +
+      notes +
+      ' notes (file) · ' +
+      lines +
+      ' lines in this view (merged)';
+  }
+
+  async function fetchSyllableViewState(wordsArr, options) {
+    const opts = options || {};
+    const r = await fetch('/api/lyrics-compare/syllable-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        words: wordsArr,
+        reference_text: effectiveRefString(),
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText || 'syllable-view failed');
+    function normalizeApiChipsToWords(chips, indices) {
+      const outChips = [];
+      const outIdx = [];
+      const c = Array.isArray(chips) ? chips : [];
+      const m = Array.isArray(indices) ? indices : [];
+      c.forEach(function (chip, i) {
+        const parts = String(chip || '').trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) return;
+        const idx = i < m.length ? m[i] : null;
+        parts.forEach(function (p) {
+          outChips.push(p);
+          outIdx.push(idx);
+        });
+      });
+      return { chips: outChips, indices: outIdx };
+    }
+    function compactKey(s) {
+      return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+    function alignChipsToWordIndices(words, chips) {
+      const out = [];
+      const list = (words || []).map(function (w, wi) {
+        return {
+          idx: wi,
+          keyA: normalizeTokenForLyricCompare(w),
+          keyB: compactKey(w),
+        };
+      }).filter(function (x) {
+        return x.keyA !== '' || x.keyB !== '';
+      });
+      let cursor = 0;
+      (chips || []).forEach(function (chip) {
+        const ckA = normalizeTokenForLyricCompare(chip);
+        const ckB = compactKey(chip);
+        let foundPos = -1;
+        for (let p = cursor; p < list.length; p++) {
+          if ((ckA && list[p].keyA === ckA) || (ckB && list[p].keyB === ckB)) {
+            foundPos = p;
+            break;
+          }
+        }
+        if (foundPos < 0) {
+          out.push(null);
+        } else {
+          out.push(list[foundPos].idx);
+          cursor = foundPos + 1;
+        }
+      });
+      return out;
+    }
+    if (session) {
+      session.syllable_runs = j.syllable_runs || [];
+      if (
+        j.reference_chips &&
+        j.reference_chips.length &&
+        j.chip_run_indices &&
+        j.chip_run_indices.length === j.reference_chips.length
+      ) {
+        const norm = normalizeApiChipsToWords(j.reference_chips, j.chip_run_indices);
+        session.reference_chips = norm.chips;
+        session.chip_run_indices = norm.indices;
+        session.chip_word_indices = alignChipsToWordIndices(wordsArr, norm.chips);
+      } else {
+        session.reference_chips = null;
+        session.chip_run_indices = null;
+        session.chip_word_indices = null;
+      }
+    }
+    if (opts.updateGenText) {
+      genText.value = (session && session.generated_words ? ultraSingerViewTextFromWords(session.generated_words) : '');
+    }
+    updateGenMeta();
+    return j;
+  }
+
+  async function refreshMergedDisplay(wordsArr) {
+    await fetchSyllableViewState(wordsArr, { updateGenText: true });
+  }
+
+  let refClickHighlightIdx = -1;
+  var refChipRenderDebounce = null;
+
+  async function replaceSyllableFromRef(index, newWord) {
+    const slots = maxSyllableSlots();
+    const runs = session && session.syllable_runs;
+    const chips = session && session.reference_chips;
+    const wordMap = session && session.chip_word_indices;
+    const wordAligned = !!(wordMap && chips && wordMap.length === chips.length);
+    const aligned = !!(session && session.chip_run_indices &&
+      session.chip_run_indices.length &&
+      chips &&
+      chips.length === session.chip_run_indices.length);
+    if (!session || !session.path || slots < 1) {
+      setFlash('Load comparison first so syllable lines exist.', 'err');
+      return;
+    }
+    if (!runs || !runs.length) {
+      setFlash('Load comparison first (merged syllable map missing).', 'err');
+      return;
+    }
+    const chipCount = aligned ? chips.length : runs.length;
+    if (index < 0 || index >= chipCount) {
+      setFlash('This chip is out of range for the current reference.', 'err');
+      return;
+    }
+    let start = -1;
+    if (wordAligned) {
+      start = wordMap[index] == null ? -1 : Number(wordMap[index]);
+    } else {
+      var runIdx = aligned ? session.chip_run_indices[index] : index;
+      if (runIdx == null || runIdx < 0 || runIdx >= runs.length) {
+        setFlash(
+          'No UltraSinger syllable aligned to this reference chip — check wording.',
+          'err'
+        );
+        return;
+      }
+      start = Number(runs[runIdx].start);
+    }
+    if (start < 0 || start >= slots) {
+      setFlash('Invalid syllable start index.', 'err');
+      return;
+    }
+    let g = (session.generated_words || []).slice();
+    while (g.length < slots) g.push('');
+    const wordsForApi = g.slice(0, slots);
+    try {
+      let f = fixText.value.replace(/\r\n/g, '\n').split('\n');
+      while (f.length < slots) f.push('');
+      const oldWord = String(g[start] || '');
+      const tildeSuffixMatch = oldWord.match(/(?:[~～〜]|\u301C)+\s*$/u);
+      const tildeSuffix = tildeSuffixMatch ? tildeSuffixMatch[0].replace(/\s+/g, '') : '';
+      const newCore = String(newWord || '').trim().replace(/(?:[~～〜]|\u301C)+\s*$/u, '').trim();
+      const replacement = tildeSuffix ? (newCore + tildeSuffix) : newCore;
+      g[start] = replacement;
+      f[start] = replacement;
+      g = g.slice(0, slots);
+      f = f.slice(0, slots);
+      fixText.value = f.join('\n');
+      session.generated_plain = g.join('\n');
+      session.generated_words = g;
+      await refreshMergedDisplay(g);
+      refClickHighlightIdx = index;
+      await renderRefClickable();
+      renderGenClickable();
+      setFlash('Reference chip ' + (index + 1) + ' set on note ' + (start + 1) + '.', 'ok');
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  }
+
+  async function renderRefClickable() {
+    const el = document.getElementById('ref-clickable');
+    if (!el) return;
+    el.innerHTML = '';
+    const raw = effectiveRefString();
+    if (!raw.trim()) {
+      const sp = document.createElement('span');
+      sp.className = 'ref-tray-empty';
+      sp.textContent = 'No reference text — run lookup or paste custom lyrics below.';
+      el.appendChild(sp);
+      return;
+    }
+    const slots = maxSyllableSlots();
+    const runN = syllableRunCount();
+    const hasSong = !!(session && session.path && slots > 0);
+    var runs = session && session.syllable_runs;
+    if (hasSong && session.generated_words && session.generated_words.length) {
+      try {
+        await fetchSyllableViewState(session.generated_words, { updateGenText: false });
+      } catch (e) {
+        setFlash(e.message || String(e), 'err');
+        if (session) {
+          session.reference_chips = null;
+          session.chip_run_indices = null;
+        }
+      }
+      runs = session && session.syllable_runs;
+    } else if (session) {
+      session.reference_chips = null;
+      session.chip_run_indices = null;
+    }
+    const tokens =
+      session && session.reference_chips && session.reference_chips.length
+        ? session.reference_chips
+        : raw.trim().split(/\s+/).filter(Boolean);
+    const aligned = !!(
+      session &&
+      session.chip_run_indices &&
+      session.chip_run_indices.length === tokens.length
+    );
+    const wordAligned = !!(
+      session &&
+      session.chip_word_indices &&
+      session.chip_word_indices.length === tokens.length
+    );
+    tokens.forEach(function (tok, i) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ref-word-chip';
+      if (i === refClickHighlightIdx) btn.classList.add('ref-word-chip--active');
+      btn.textContent = tok;
+      const disabled =
+        !hasSong || (wordAligned ? session.chip_word_indices[i] == null : (aligned ? session.chip_run_indices[i] == null : i >= runN));
+      btn.disabled = disabled;
+      var titleBase = hasSong
+        ? 'Apply to aligned UltraSinger syllable (chip ' +
+          (i + 1) +
+          '): ' +
+          tok
+        : 'Load comparison first to apply syllables';
+      let disp = '';
+      if (!disabled && wordAligned) {
+        const wi = Number(session.chip_word_indices[i]);
+        disp = wi >= 0 && wi < (session.generated_words || []).length ? String(session.generated_words[wi] || '') : '';
+      } else {
+        var runIdx = aligned ? session.chip_run_indices[i] : i;
+        if (runs && runs.length && runIdx != null && runIdx >= 0 && runIdx < runs.length) {
+          disp = runs[runIdx].display != null ? String(runs[runIdx].display) : '';
+        }
+      }
+      if (!disabled && disp !== '') {
+        const same = chipTextMatchesDisplay(tok, disp);
+        btn.classList.add(same ? 'ref-word-chip--match' : 'ref-word-chip--mismatch');
+        btn.title =
+          titleBase +
+          (same
+            ? ' — matches UltraSinger'
+            : ' — differs from UltraSinger (“' + disp + '”)');
+      } else {
+        btn.title = titleBase;
+      }
+      if (i === refClickHighlightIdx) {
+        btn.title = (btn.title || titleBase) + ' — click again to clear selection';
+      }
+      btn.addEventListener('click', function () {
+        if (refClickHighlightIdx === i) {
+          refClickHighlightIdx = -1;
+          void renderRefClickable();
+          setFlash('');
+          return;
+        }
+        replaceSyllableFromRef(i, tok).catch(function (err) {
+          setFlash(err.message || String(err), 'err');
+        });
+      });
+      el.appendChild(btn);
+    });
+  }
+
+  function runRangeChangedAgainstBaseline(start, length) {
+    if (!session || !session.generated_words || !session.baseline_words) return false;
+    const current = session.generated_words;
+    const base = session.baseline_words;
+    for (let k = 0; k < length; k++) {
+      if ((current[start + k] || '') !== (base[start + k] || '')) return true;
+    }
+    return false;
+  }
+
+  function renderGenClickable() {
+    if (!genClickable) return;
+    genClickable.innerHTML = '';
+    const words = session && session.generated_words;
+    if (!session || !words || !words.length) {
+      const sp = document.createElement('span');
+      sp.className = 'ref-tray-empty';
+      sp.textContent = 'Load comparison to show UltraSinger chips.';
+      genClickable.appendChild(sp);
+      return;
+    }
+    const visibleIdx = visibleUltraSingerWordIndices(words);
+    visibleIdx.forEach(function (i) {
+      const word = words[i];
+      const changed = runRangeChangedAgainstBaseline(i, 1);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gen-word-chip';
+      if (changed) btn.classList.add('gen-word-chip--changed');
+      btn.textContent = ultraSingerViewToken(word);
+      btn.title = changed
+        ? 'Undo this corrected UltraSinger note'
+        : 'Matches current file baseline';
+      btn.addEventListener('click', function () {
+        if (!changed) return;
+        void undoWordToBaseline(i).catch(function (err) {
+          setFlash(err.message || String(err), 'err');
+        });
+      });
+      genClickable.appendChild(btn);
+    });
+  }
+
+  async function undoWordToBaseline(wordIdx) {
+    if (!session || !session.baseline_words || !session.generated_words) return;
+    const slots = maxSyllableSlots();
+    let g = (session.generated_words || []).slice();
+    while (g.length < slots) g.push('');
+    let f = fixText.value.replace(/\r\n/g, '\n').split('\n');
+    while (f.length < slots) f.push('');
+    const restored = session.baseline_words[wordIdx] || '';
+    g[wordIdx] = restored;
+    f[wordIdx] = restored;
+    g = g.slice(0, slots);
+    f = f.slice(0, slots);
+    session.generated_words = g;
+    session.generated_plain = g.join('\n');
+    fixText.value = f.join('\n');
+    await refreshMergedDisplay(g);
+    await renderRefClickable();
+    renderGenClickable();
+    setFlash('Undo applied for UltraSinger note ' + (wordIdx + 1) + '.', 'ok');
+  }
+
+  function referenceToSyllableLines(ref) {
+    if (!ref) return '';
+    return ref
+      .split(/\s+/)
+      .map(function (w) {
+        return w.trim();
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  function refLyricsForDisplay(src) {
+    if (!src) return '';
+    if (typeof src.lyrics_display === 'string') return src.lyrics_display;
+    return src.lyrics || '';
+  }
+
+  function renderTabs() {
+    tabsEl.innerHTML = '';
+    sourcesData.length = 0;
+    if (!session || !session.sources) return;
+    session.sources.forEach(function (src, i) {
+      sourcesData.push(src);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = src.source + (src.ok ? '' : ' (failed)');
+      b.disabled = !src.ok;
+      if (i === activeSourceIdx) b.classList.add('active');
+      b.addEventListener('click', function () {
+        if (!src.ok) return;
+        activeSourceIdx = i;
+        renderTabs();
+        refText.value = refLyricsForDisplay(src);
+        refMeta.textContent =
+          'Source: ' + src.source + '. ' + (src.meta ? JSON.stringify(src.meta) : '') + REF_CHIP_HINT;
+        void renderRefClickable().catch(function (err) {
+          setFlash(err.message || String(err), 'err');
+        });
+      });
+      tabsEl.appendChild(b);
+    });
+  }
+
+  document.getElementById('btn-load-list').addEventListener('click', loadSongList);
+
+  songSelect.addEventListener('change', function () {
+    const p = songSelect.value;
+    const s = allSongs.find(function (x) { return x.path === p; });
+    if (s) {
+      if (s.artist) artistIn.value = s.artist;
+      if (s.title) titleIn.value = s.title;
+      else if (s.name && s.name.indexOf(' - ') < 0) titleIn.value = s.name;
+    }
+  });
+
+  function applySourcesToUI(j) {
+    session = session || {};
+    session.sources = j.sources;
+    session.artist = j.artist;
+    session.title = j.title;
+    activeSourceIdx = 0;
+    const firstOk = (j.sources || []).findIndex(function (s) { return s.ok; });
+    if (firstOk >= 0) activeSourceIdx = firstOk;
+    refText.value = '';
+    if (j.sources && j.sources[activeSourceIdx] && j.sources[activeSourceIdx].ok) {
+      refText.value = refLyricsForDisplay(j.sources[activeSourceIdx]);
+      refMeta.textContent =
+        'Source: ' +
+        j.sources[activeSourceIdx].source +
+        ' · ' +
+        (j.artist || '') +
+        ' — ' +
+        (j.title || '') +
+        REF_CHIP_HINT;
+    } else {
+      refMeta.textContent =
+        'No database hit for “' +
+        (j.artist || '') +
+        ' — ' +
+        (j.title || '') +
+        '”. Try different spelling or custom paste.' +
+        REF_CHIP_HINT;
+    }
+    renderTabs();
+    void renderRefClickable().catch(function (err) {
+      setFlash(err.message || String(err), 'err');
+    });
+    renderGenClickable();
+  }
+
+  document.getElementById('btn-lookup-remote').addEventListener('click', async function () {
+    const path = songSelect.value.trim();
+    const artist = artistIn.value.trim();
+    const titleTr = titleIn.value.trim();
+    if ((!artist || !titleTr) && !path) {
+      setFlash(
+        'Enter artist and song title, or select an exported song (folder name “Artist - Title” is used when the fields are empty).',
+        'err'
+      );
+      return;
+    }
+    setFlash('Looking up lyrics…');
+    saveMsg.textContent = '';
+    try {
+      const payload = {};
+      if (path) payload.path = path;
+      if (artist) payload.artist = artist;
+      if (titleTr) payload.title = titleTr;
+      const r = await fetch('/api/lyrics-compare/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText || 'Lookup failed');
+      if (!session) session = {};
+      session.path = j.path || session.path || null;
+      session.txt_path = session.txt_path || null;
+      session.generated_plain = session.generated_plain || '';
+      session.generated_words = session.generated_words || [];
+      applySourcesToUI(j);
+      setFlash('Reference lyrics updated from online sources.', 'ok');
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  });
+
+  document.getElementById('btn-run').addEventListener('click', async function () {
+    const path = songSelect.value.trim();
+    if (!path) {
+      setFlash('Select an exported song to load UltraSinger text from disk. Use “Lookup lyrics online” if you only need reference lyrics.', 'err');
+      return;
+    }
+    setFlash('Loading…');
+    saveMsg.textContent = '';
+    try {
+      const payload = { path: path };
+      const a = artistIn.value.trim();
+      const t = titleIn.value.trim();
+      if (a) payload.artist = a;
+      if (t) payload.title = t;
+      const r = await fetch('/api/lyrics-compare/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText || 'Request failed');
+      session = j;
+      session.baseSyllableCount = (j.generated_words || []).length;
+      session.syllable_runs = j.syllable_runs || [];
+      session.baseline_words = (j.generated_words || []).slice();
+      activeSourceIdx = 0;
+      const firstOk = (j.sources || []).findIndex(function (s) { return s.ok; });
+      if (firstOk >= 0) activeSourceIdx = firstOk;
+      genText.value = ultraSingerViewTextFromWords(j.generated_words || []);
+      updateGenMeta();
+      refText.value = '';
+      if (j.sources && j.sources[activeSourceIdx] && j.sources[activeSourceIdx].ok) {
+        refText.value = refLyricsForDisplay(j.sources[activeSourceIdx]);
+        refMeta.textContent =
+          'Source: ' +
+          j.sources[activeSourceIdx].source +
+          ' · ' +
+          (j.artist || '') +
+          ' — ' +
+          (j.title || '') +
+          REF_CHIP_HINT;
+      } else {
+        refMeta.textContent =
+          'No database hit — adjust artist/title above, “Lookup lyrics online”, or use custom paste.' +
+          REF_CHIP_HINT;
+      }
+      renderTabs();
+      fixText.value = j.generated_plain || '';
+      artistIn.value = j.artist || artistIn.value;
+      titleIn.value = j.title || titleIn.value;
+      refClickHighlightIdx = -1;
+      await renderRefClickable();
+      renderGenClickable();
+      setFlash('Loaded. Compare reference with UltraSinger; click reference words or edit the correction box.', 'ok');
+    } catch (e) {
+      session = null;
+      setFlash(e.message || String(e), 'err');
+    }
+  });
+
+  document.getElementById('btn-copy-ref').addEventListener('click', function () {
+    fixText.value = referenceToSyllableLines(visibleReference());
+    refClickHighlightIdx = -1;
+    void renderRefClickable().catch(function (err) {
+      setFlash(err.message || String(err), 'err');
+    });
+  });
+  document.getElementById('btn-copy-gen').addEventListener('click', function () {
+    if (!session || !session.generated_words) return;
+    fixText.value = session.generated_words.join('\n');
+    setFlash('Copied UltraSinger lines to corrections.', 'ok');
+  });
+  document.getElementById('btn-reset-gen').addEventListener('click', function () {
+    if (!session) return;
+    fixText.value = session.generated_plain || '';
+    let words = (session.generated_plain || '').replace(/\r\n/g, '\n').split('\n');
+    while (words.length && words[words.length - 1] === '') words.pop();
+    session.generated_words = words;
+    session.baseSyllableCount = words.length;
+    refClickHighlightIdx = -1;
+    refreshMergedDisplay(words).catch(function (err) {
+      setFlash(err.message || String(err), 'err');
+    }).then(function () {
+      return renderRefClickable();
+    }).then(function () {
+      renderGenClickable();
+    }).catch(function (err) {
+      setFlash(err.message || String(err), 'err');
+    });
+  });
+
+  document.getElementById('btn-save').addEventListener('click', async function () {
+    if (!session || !session.path) {
+      setFlash('Run “Load comparison” first.', 'err');
+      return;
+    }
+    saveMsg.textContent = '';
+    setFlash('');
+    try {
+      const r = await fetch('/api/lyrics-compare/apply-words', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: session.path,
+          txt_path: session.txt_path,
+          plain_text: fixText.value.replace(/\r\n/g, '\n'),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText || 'Save failed');
+      if (session) {
+        session.generated_plain = j.plain_after || '';
+        session.generated_words = j.generated_words || (j.plain_after || '').replace(/\r\n/g, '\n').split('\n');
+        while (
+          session.generated_words.length &&
+          session.generated_words[session.generated_words.length - 1] === ''
+        ) {
+          session.generated_words.pop();
+        }
+        session.baseSyllableCount = session.generated_words.length;
+        session.baseline_words = session.generated_words.slice();
+        session.syllable_runs = j.syllable_runs || session.syllable_runs;
+        genText.value = ultraSingerViewTextFromWords(session.generated_words || []);
+        updateGenMeta();
+      }
+      refClickHighlightIdx = -1;
+      await renderRefClickable();
+      renderGenClickable();
+      saveMsg.textContent = (j.warning || '') + ' Saved.';
+      if (j.warning) saveMsg.style.color = 'var(--warn)';
+      else saveMsg.style.color = 'var(--ok)';
+      setFlash('UltraStar file updated.', 'ok');
+    } catch (e) {
+      setFlash(e.message || String(e), 'err');
+    }
+  });
+
+  refCustom.addEventListener('input', function () {
+    if (refChipRenderDebounce) clearTimeout(refChipRenderDebounce);
+    refChipRenderDebounce = setTimeout(function () {
+      void renderRefClickable().catch(function (err) {
+        setFlash(err.message || String(err), 'err');
+      });
+    }, 320);
+  });
+
+  loadSongList();
+  void renderRefClickable().catch(function (err) {
+    setFlash(err.message || String(err), 'err');
+  });
+  renderGenClickable();
+})();
+</script>
+{% endblock %}

@@ -17,7 +17,9 @@ from typing import Optional
 from webui.config import WebUIConfig, load_config, paths_for_worker
 from webui.job_manager import JobManager, JobStatus, job_manager
 from webui.output_bundle import iter_job_output_files
+from webui import __version__ as webui_version_str
 from webui.yarg_export import group_output_by_song_folder, plan_yarg_flat_copies
+from webui.ultrasinger_tag import write_ultrasinger_tags_after_job
 
 log = logging.getLogger("ultrasinger.webui.worker")
 VIDEO_SUFFIXES = frozenset({".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"})
@@ -261,6 +263,8 @@ class WorkerService:
             self._cleanup_job_cache(out)
         if ok:
             self._capture_youtube_background_if_needed(cfg, job, out)
+            p = paths_for_worker(cfg)
+            write_ultrasinger_tags_after_job(job, out, p["repo_root"], webui_version_str)
             self._copy_yarg_export_folder(cfg, job_id, out)
             self._copy_ultrastar_export_folder(cfg, job_id, out)
 

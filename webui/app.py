@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from webui.config import ensure_data_layout, load_config, save_config
 from webui.job_manager import job_manager
-from webui.routes import api, pages
+from webui.routes import api, lyrics_compare, pages
 from webui.services.cleanup import run_cleanup
 from webui.single_instance import acquire_or_exit, release
 from webui.worker import worker_service
@@ -119,4 +119,5 @@ _assets = Path(__file__).resolve().parent.parent / "assets"
 app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
 app.include_router(api.router)
+app.include_router(lyrics_compare.router)
 app.include_router(pages.router)
