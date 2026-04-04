@@ -16,7 +16,11 @@ output
 
 # WebUI runtime (local settings; never commit — may contain API keys and paths)
 /data/webui_config.json
+# Job queue (queue.json) and per-job folders (job.json, logs, audio, etc.)
 /data/jobs/
+# Download / bulk ZIPs (anywhere in the repo)
+*.zip
+*.ZIP
 /data/temp/
 /data/cookies.txt
 /data/history/
