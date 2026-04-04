@@ -14,7 +14,8 @@ test_output
 # default output folder
 output
 
-# WebUI runtime (config at data/webui_config.json may be kept locally)
+# WebUI runtime (local settings; never commit — may contain API keys and paths)
+/data/webui_config.json
 /data/jobs/
 /data/temp/
 /data/cookies.txt
