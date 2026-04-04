@@ -43,11 +43,12 @@ async function refresh() {
     fetch('/api/jobs/' + jobId).then(r => r.json()),
     fetch('/api/jobs/' + jobId + '/log?tail=4000').then(r => r.json()),
   ]);
+  const statusPretty = jr.status === 'skipped' ? 'Skipped' : (jr.status || '');
   summary.innerHTML =
     '<strong>Title:</strong> ' + (jr.title || '') + '<br/>' +
     '<strong>Artist:</strong> ' + (jr.artist || '—') + '<br/>' +
     '<strong>Source:</strong> ' + (jr.source || '') + '<br/>' +
-    '<strong>Status:</strong> ' + (jr.status || '') + ' &nbsp; <strong>Stage:</strong> ' + (jr.stage || '') + '<br/>' +
+    '<strong>Status:</strong> ' + statusPretty + ' &nbsp; <strong>Stage:</strong> ' + (jr.stage || '') + '<br/>' +
     (jr.error ? '<strong>Error:</strong> ' + jr.error + '<br/>' : '');
 
   const dl = document.getElementById('btn-dl');
@@ -56,7 +57,7 @@ async function refresh() {
   document.getElementById('btn-cancel').style.display =
     (jr.status === 'queued' || jr.status === 'running') ? 'inline-flex' : 'none';
   document.getElementById('btn-retry').style.display =
-    (jr.status === 'failed' || jr.status === 'completed') ? 'inline-flex' : 'none';
+    (jr.status === 'failed' || jr.status === 'completed' || jr.status === 'skipped') ? 'inline-flex' : 'none';
 
   logEl.textContent = lr.lines || '';
   if (autoscroll.checked && !userScrolled) {

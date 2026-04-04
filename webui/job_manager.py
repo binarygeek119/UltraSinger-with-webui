@@ -18,6 +18,8 @@ from webui.ultrasinger_tag import read_prior_song_version_from_job_output
 
 log = logging.getLogger("ultrasinger.webui.jobs")
 
+_QUEUE_STATE_FILENAME = "queue.json"
+
 
 class JobStatus(str, Enum):
     QUEUED = "queued"
@@ -25,6 +27,7 @@ class JobStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    SKIPPED = "skipped"
 
 
 def _now_iso() -> str:
@@ -112,9 +115,55 @@ class JobManager:
                     self._jobs[jid] = data
             except (OSError, json.JSONDecodeError) as e:
                 log.warning("Skip bad job folder %s: %s", p, e)
-        queued_ids.sort(key=lambda x: self._jobs[x].get("created_at") or "")
+        self._restore_queue_and_paused_from_disk(cfg)
+
+    def _persist_queue_state(self) -> None:
+        """Write queue order and pause flag so restarts keep the same queue."""
+        with self._lock:
+            cfg = self._cfg()
+            root = cfg.jobs_dir()
+            root.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "version": 1,
+                "paused": self._paused,
+                "queue": list(self._queue),
+            }
+            (root / _QUEUE_STATE_FILENAME).write_text(
+                json.dumps(payload, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+    def _restore_queue_and_paused_from_disk(self, cfg: WebUIConfig) -> None:
+        """Rebuild deque from queue.json; fall back to created_at order for any missing ids."""
+        queued_set = {
+            jid
+            for jid, j in self._jobs.items()
+            if j.get("status") == JobStatus.QUEUED.value
+        }
+        saved_queue: list[str] = []
+        saved_paused = False
+        qfile = cfg.jobs_dir() / _QUEUE_STATE_FILENAME
+        if qfile.is_file():
+            try:
+                data = json.loads(qfile.read_text(encoding="utf-8"))
+                saved_paused = bool(data.get("paused"))
+                raw = data.get("queue")
+                if isinstance(raw, list):
+                    saved_queue = [str(x) for x in raw if isinstance(x, str)]
+            except (OSError, json.JSONDecodeError) as e:
+                log.warning("Could not read %s: %s", qfile, e)
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for jid in saved_queue:
+            if jid in queued_set:
+                ordered.append(jid)
+                seen.add(jid)
+        remainder = sorted(queued_set - seen, key=lambda x: self._jobs[x].get("created_at") or "")
+        ordered.extend(remainder)
         self._queue.clear()
-        self._queue.extend(queued_ids)
+        self._queue.extend(ordered)
+        self._paused = saved_paused
 
     def wipe_jobs_dir_and_reset(self) -> None:
         """Delete every job folder under data/jobs and clear queue state (startup reset)."""
@@ -127,6 +176,10 @@ class JobManager:
             self._running_proc = None
         _wipe_jobs_root(cfg)
         log.info("Jobs directory cleared and queue reset")
+        try:
+            self._persist_queue_state()
+        except OSError:
+            log.warning("Could not write empty queue state after wipe", exc_info=True)
 
     def _save_job(self, job: dict[str, Any]) -> None:
         cfg = self._cfg()
@@ -141,14 +194,18 @@ class JobManager:
 
         with self._lock:
             jobs = [dict(j) for j in self._jobs.values()]
+            queue_snapshot = list(self._queue)
+            paused_snapshot = self._paused
         jobs.sort(key=lambda j: str(j.get("created_at") or ""))
 
         payload = {
             "format": "ultrasinger-webui-jobs-backup",
-            "version": 1,
+            "version": 2,
             "exported_at": _now_iso(),
             "jobs": jobs,
             "count": len(jobs),
+            "queue": queue_snapshot,
+            "paused": paused_snapshot,
         }
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         out = backup_dir / f"jobs_backup_{stamp}.json"
@@ -218,6 +275,7 @@ class JobManager:
             self._jobs[job_id] = job
             self._queue.append(job_id)
             self._save_job(job)
+            self._persist_queue_state()
         self.append_history(job_id, "queued")
         return job
 
@@ -260,7 +318,9 @@ class JobManager:
                 jid = self._queue.popleft()
                 j = self._jobs.get(jid)
                 if j and j.get("status") == JobStatus.QUEUED.value:
+                    self._persist_queue_state()
                     return jid
+            self._persist_queue_state()
             return None
 
     def mark_running(self, job_id: str) -> None:
@@ -316,6 +376,22 @@ class JobManager:
             self._save_job(j)
         self.append_history(job_id, "completed" if success else "failed")
 
+    def skip_job(self, job_id: str, stage_message: str) -> None:
+        """Mark job completed without running UltraSinger (e.g. already present in export folder)."""
+        with self._lock:
+            j = self._jobs.get(job_id)
+            if not j:
+                return
+            now = _now_iso()
+            j["status"] = JobStatus.SKIPPED.value
+            j["stage"] = stage_message
+            j["error"] = None
+            j["started_at"] = now
+            j["completed_at"] = now
+            j["duration_seconds"] = 0.0
+            self._save_job(j)
+        self.append_history(job_id, "skipped")
+
     def set_running_process(self, proc) -> None:
         self._running_proc = proc
 
@@ -345,10 +421,12 @@ class JobManager:
                     self._save_job(j)
                     self._current_job_id = None
             self.append_history(jid, "cancelled")
+        self._persist_queue_state()
 
     def resume_processing(self) -> None:
         with self._lock:
             self._paused = False
+            self._persist_queue_state()
 
     def cancel_all_active(self) -> int:
         """Cancel every queued and running job. Does not change pause state (unlike stop_all)."""
@@ -392,6 +470,7 @@ class JobManager:
                         self._queue.remove(job_id)
                 except ValueError:
                     pass
+                self._persist_queue_state()
                 self.append_history(job_id, "cancelled")
                 return True
             if j.get("status") == JobStatus.RUNNING.value and proc and proc.poll() is None:
@@ -412,6 +491,7 @@ class JobManager:
             if not j or j.get("status") not in (
                 JobStatus.FAILED.value,
                 JobStatus.COMPLETED.value,
+                JobStatus.SKIPPED.value,
             ):
                 return False
             cfg = self._cfg()
@@ -433,6 +513,7 @@ class JobManager:
                     pass
             self._queue.append(job_id)
             self._save_job(j)
+            self._persist_queue_state()
         self.append_history(job_id, "retry")
         return True
 
@@ -449,6 +530,7 @@ class JobManager:
             except ValueError:
                 return False
             self._queue.appendleft(job_id)
+            self._persist_queue_state()
         self.append_history(job_id, "prioritized")
         return True
 
@@ -478,6 +560,7 @@ class JobManager:
                 in (
                     JobStatus.COMPLETED.value,
                     JobStatus.CANCELLED.value,
+                    JobStatus.SKIPPED.value,
                 )
             ]
         for jid in ids:
@@ -486,6 +569,7 @@ class JobManager:
                 if not cur or cur.get("status") not in (
                     JobStatus.COMPLETED.value,
                     JobStatus.CANCELLED.value,
+                    JobStatus.SKIPPED.value,
                 ):
                     continue
             if self.clear_job(jid):

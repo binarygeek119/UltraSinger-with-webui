@@ -20,6 +20,7 @@ from webui.output_bundle import iter_job_output_files
 from webui import __version__ as webui_version_str
 from webui.yarg_export import group_output_by_song_folder, plan_yarg_flat_copies
 from webui.ultrasinger_tag import write_ultrasinger_tags_after_job
+from webui.export_skip_check import should_skip_job_already_exported
 
 log = logging.getLogger("ultrasinger.webui.worker")
 VIDEO_SUFFIXES = frozenset({".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"})
@@ -198,6 +199,21 @@ class WorkerService:
         job = self._jm.get_job(job_id)
         if not job:
             return
+
+        force_reexport = os.environ.get("ULTRASINGER_WEBUI_FORCE_REEXPORT", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not force_reexport:
+            skip, export_path = should_skip_job_already_exported(cfg, job)
+            if skip:
+                log.info("Skipping job %s: already exported under %s", job_id, export_path)
+                self._jm.skip_job(
+                    job_id,
+                    f"Skipped — already in export folder ({export_path})",
+                )
+                return
 
         from webui.config import ensure_data_layout
 

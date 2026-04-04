@@ -20,6 +20,7 @@
       <input type="checkbox" name="youtube_metadata" id="youtube_metadata" value="on" />
       <label for="youtube_metadata" style="margin:0;">Use YouTube metadata only (skip MusicBrainz for title/artist/cover)</label>
     </div>
+    <p id="youtube-metadata-hint" style="font-size:0.82rem;color:var(--muted);margin:0.35rem 0 0;line-height:1.45;display:none;"></p>
     <div id="msg-url" class="flash"></div>
   </form>
 </section>
@@ -42,6 +43,42 @@
 <p><a href="/jobs">View job queue →</a></p>
 
 <script>
+var LS_QUEUE_YT_METADATA = 'ultrasinger_webui_queue_youtube_metadata';
+
+function restoreYoutubeMetadataCheckbox() {
+  var cb = document.getElementById('youtube_metadata');
+  if (!cb) return;
+  try {
+    var v = localStorage.getItem(LS_QUEUE_YT_METADATA);
+    if (v === '1') cb.checked = true;
+    else if (v === '0') cb.checked = false;
+  } catch (_e) {}
+}
+
+function saveYoutubeMetadataCheckbox(checked) {
+  try {
+    localStorage.setItem(LS_QUEUE_YT_METADATA, checked ? '1' : '0');
+  } catch (_e) {}
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  restoreYoutubeMetadataCheckbox();
+  var cb = document.getElementById('youtube_metadata');
+  var hint = document.getElementById('youtube-metadata-hint');
+  if (!cb || !hint) return;
+  cb.addEventListener('change', function () {
+    saveYoutubeMetadataCheckbox(cb.checked);
+    if (!cb.checked) {
+      hint.style.display = 'block';
+      hint.textContent =
+        'You turned off “YouTube metadata only”. MusicBrainz may be used for title, artist, and cover when available.';
+    } else {
+      hint.style.display = 'none';
+      hint.textContent = '';
+    }
+  });
+});
+
 async function postForm(url, data, msgEl) {
   msgEl.textContent = '';
   msgEl.className = 'flash';
@@ -96,7 +133,10 @@ document.getElementById('form-url').onsubmit = async (e) => {
   } else {
     msg.textContent = 'Queued ' + queued + ' job(s) from ' + urls.length + ' URL(s).';
     msg.className = 'flash ok';
-    form.reset();
+    if (form.elements.url) form.elements.url.value = '';
+    saveYoutubeMetadataCheckbox(
+      form.elements.youtube_metadata && form.elements.youtube_metadata.checked
+    );
   }
 };
 

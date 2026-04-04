@@ -71,12 +71,13 @@ async def lifespan(app: FastAPI):
         if not cfg.config_path().is_file():
             save_config(cfg)
 
-        _keep_jobs = os.environ.get("ULTRASINGER_WEBUI_KEEP_JOBS", "").strip().lower() in (
+        # Jobs and queue persist across restarts by default (each job has job.json; queue order in queue.json).
+        _clear_jobs = os.environ.get("ULTRASINGER_WEBUI_CLEAR_JOBS_ON_START", "").strip().lower() in (
             "1",
             "true",
             "yes",
         )
-        if not _keep_jobs:
+        if _clear_jobs:
             job_manager.wipe_jobs_dir_and_reset()
 
         if cfg.cleanup_on_startup:

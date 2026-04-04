@@ -331,6 +331,10 @@ input[type="file"].file-input-skinned:focus::-webkit-file-upload-button {
   background: rgba(74, 222, 128, 0.15);
   color: var(--ok);
 }
+.status-skipped {
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+}
 .status-failed,
 .status-cancelled {
   background: rgba(248, 113, 113, 0.15);

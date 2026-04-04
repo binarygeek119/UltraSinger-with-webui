@@ -7,7 +7,7 @@
   <button type="button" class="btn secondary" id="btn-retry-failed">Retry all failed jobs</button>
   <button type="button" class="btn secondary" id="btn-clear-failed">Clear failed jobs</button>
   <button type="button" class="btn secondary" id="btn-resume">Resume processing</button>
-  <button type="button" class="btn secondary" id="btn-clear">Clear finished jobs</button>
+  <button type="button" class="btn secondary" id="btn-clear" title="Remove completed, cancelled, and skipped jobs from the list">Clear finished jobs</button>
   <a class="btn secondary" id="btn-export-jobs" href="/api/jobs/export">Export jobs</a>
   <button type="button" class="btn secondary" id="btn-import-jobs">Import jobs</button>
   <input type="file" id="import-jobs-file" accept=".json,application/json" style="display:none;" />
@@ -45,9 +45,16 @@ function fmtDur(s) {
   return m + ':' + String(sec).padStart(2, '0');
 }
 
+function statusLabel(st) {
+  const s = String(st || '').toLowerCase();
+  if (!s) return '';
+  if (s === 'skipped') return 'Skipped';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function pill(st) {
   const c = 'status-pill status-' + String(st || '').toLowerCase();
-  return '<span class="' + c + '">' + (st || '') + '</span>';
+  return '<span class="' + c + '">' + statusLabel(st) + '</span>';
 }
 
 function escHtml(v) {
@@ -95,10 +102,10 @@ async function loadJobs() {
     if (x.status === 'queued') {
       actions.push('<button class="btn secondary" data-act="prioritize" data-id="' + x.job_id + '">Move to top</button>');
     }
-    if (x.status === 'failed' || x.status === 'completed') {
+    if (x.status === 'failed' || x.status === 'completed' || x.status === 'skipped') {
       actions.push('<button class="btn secondary" data-act="retry" data-id="' + x.job_id + '">Retry</button>');
     }
-    if (['completed', 'failed', 'cancelled'].indexOf(x.status) >= 0) {
+    if (['completed', 'failed', 'cancelled', 'skipped'].indexOf(x.status) >= 0) {
       actions.push('<button class="btn secondary" data-act="clear" data-id="' + x.job_id + '">Clear</button>');
     }
     actions.push('<a class="btn secondary" href="/jobs/' + x.job_id + '">Details</a>');
