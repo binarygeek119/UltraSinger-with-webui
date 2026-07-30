@@ -61,7 +61,7 @@ jobs:
       # Build image using Buildah action https://github.com/redhat-actions/buildah-build
       - name: Build Image
         id: build_image
-        uses: redhat-actions/buildah-build@v2
+        uses: redhat-actions/buildah-build@v3
         with:
           image: ${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG_URL }}
           tags: ${{ steps.docker-metadata.outputs.tags }}
@@ -73,7 +73,7 @@ jobs:
             ${{ steps.docker-metadata.outputs.labels }}
       # Push the image to GHCR (Image Registry) https://github.com/redhat-actions/push-to-registry
       - name: Push To Registry
-        uses: redhat-actions/push-to-registry@v2
+        uses: redhat-actions/push-to-registry@v3
         id: push
         with:
           image: ${{ steps.build_image.outputs.image }}
