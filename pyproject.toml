@@ -16,6 +16,8 @@ dependencies = [
     "langcodes",
     "language_data",
     "packaging",
+    # Floor for Python 3.12: without this, uv may resolve librosa → numba 0.53 / llvmlite 0.36
+    "numba>=0.59",
     "librosa",
     "swift-f0",
     "pydub",

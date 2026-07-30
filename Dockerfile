@@ -19,14 +19,15 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 ENV UV_LINK_MODE=copy
 
-# copy pyproject.toml first to leverage container image build cache
-COPY ./pyproject.toml /app/UltraSinger/pyproject.toml
+# copy project metadata first to leverage container image build cache
+COPY ./pyproject.toml ./uv.lock /app/UltraSinger/
 # Need to copy some minimal source structure for editable install
 RUN mkdir -p /app/UltraSinger/src
 WORKDIR /app/UltraSinger
 
-# Install dependencies from pyproject.toml directly without venv (container is already isolated)
-# Using build isolation (without --no-build-isolation) so uv handles all build dependencies automatically
+# Install dependencies from pyproject.toml directly without venv (container is already isolated).
+# numba>=0.59 in pyproject prevents uv from resolving librosa → numba 0.53 / llvmlite 0.36
+# (llvmlite 0.36 only supports Python <3.10 and fails on 3.12).
 RUN uv pip install --system --python 3.12 -e ".[webui]"
 
 # Install PyTorch with CUDA support (override the CPU version from pyproject.toml)
