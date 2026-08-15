@@ -23,7 +23,7 @@ Then open http://localhost:8756
 - Job data: `./data`
 - Optional exports (enable in Settings): `./export/yarg` and `./export/ultrastar`
 - Host port: `WEBUI_PORT=8756` (change if needed)
-- NVIDIA GPU compose needs the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+- NVIDIA GPU compose uses the legacy `runtime: nvidia` (nvidia-docker / nvidia-container-runtime). Set `NVIDIA_VISIBLE_DEVICES` if you need a specific GPU.
 
 The image starts `python3.12 -m webui`. For the original CLI shell workflow, see below.
 
