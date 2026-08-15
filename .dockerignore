@@ -16,5 +16,9 @@ test_output
 
 # default output folder
 output
+
+# WebUI runtime / compose bind mounts (re-mounted at run time)
+data
+export
 /UltraSinger*.spec
 /registry_path.txt

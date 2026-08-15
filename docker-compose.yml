@@ -1,0 +1,57 @@
+# UltraSinger Web UI with NVIDIA GPU.
+# From the repository root:
+#   docker compose up --build
+# Then open http://localhost:8756
+#
+# CPU-only: docker compose -f docker-compose.cpu.yml up --build
+#
+# Bind-mount host song folders by changing the left side of the export volumes.
+
+services:
+  webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ultrasinger-webui:local
+    container_name: UltraSinger-WebUI
+    init: true
+    restart: unless-stopped
+    working_dir: /app/UltraSinger
+    command: ["python3.12", "-m", "webui"]
+    ports:
+      - "${WEBUI_PORT:-8756}:8756"
+    environment:
+      HOME: /app/UltraSinger
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app/UltraSinger
+      WEBUI_NO_BROWSER: "1"
+      ULTRASINGER_WEBUI_HOST: "0.0.0.0"
+      ULTRASINGER_WEBUI_PORT: "8756"
+      ULTRASINGER_WEBUI_TRAY: "0"
+      ULTRASINGER_YARG_EXPORT_PATH: /export/yarg
+      ULTRASINGER_ULTRASTAR_EXPORT_PATH: /export/ultrastar
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ./data:/app/UltraSinger/data
+      - ./export/yarg:/export/yarg
+      - ./export/ultrastar:/export/ultrastar
+      - webui-cache:/app/UltraSinger/.cache
+    shm_size: "2gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8756/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  webui-cache:

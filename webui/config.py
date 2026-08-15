@@ -193,6 +193,18 @@ def _maybe_merge_export_folders_file(cfg: WebUIConfig) -> None:
     _apply_export_folders_raw(cfg, raw)
 
 
+def _env_flag(name: str) -> bool | None:
+    """Return True/False if *name* is a recognized boolean env value, else None."""
+    v = os.environ.get(name, "").strip().lower()
+    if not v:
+        return None
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
 def _apply_env_overrides(cfg: WebUIConfig) -> None:
     """Deployment overrides (e.g. Docker). Env wins over file for these keys."""
     h = os.environ.get("ULTRASINGER_WEBUI_HOST", "").strip()
@@ -204,6 +216,27 @@ def _apply_env_overrides(cfg: WebUIConfig) -> None:
             cfg.port = int(p)
         except ValueError:
             pass
+    data_dir = os.environ.get("ULTRASINGER_WEBUI_DATA_DIRECTORY", "").strip()
+    if data_dir:
+        cfg.data_directory = data_dir
+    force_cpu = _env_flag("ULTRASINGER_WEBUI_FORCE_CPU")
+    if force_cpu is not None:
+        cfg.force_cpu = force_cpu
+    tray = _env_flag("ULTRASINGER_WEBUI_TRAY")
+    if tray is not None:
+        cfg.tray_enabled = tray
+    yarg_path = os.environ.get("ULTRASINGER_YARG_EXPORT_PATH", "").strip()
+    if yarg_path:
+        cfg.yarg_export_path = yarg_path
+    yarg_on = _env_flag("ULTRASINGER_YARG_EXPORT_ENABLED")
+    if yarg_on is not None:
+        cfg.yarg_export_enabled = yarg_on
+    us_path = os.environ.get("ULTRASINGER_ULTRASTAR_EXPORT_PATH", "").strip()
+    if us_path:
+        cfg.ultrastar_export_path = us_path
+    us_on = _env_flag("ULTRASINGER_ULTRASTAR_EXPORT_ENABLED")
+    if us_on is not None:
+        cfg.ultrastar_export_enabled = us_on
 
 
 def save_config(cfg: WebUIConfig) -> None:

@@ -24,5 +24,7 @@ output
 /data/temp/
 /data/cookies.txt
 /data/history/
+# Docker Compose host bind mounts for YARG / UltraStar export
+/export/
 /UltraSinger*.spec
 /registry_path.txt

@@ -2,6 +2,7 @@
 
 ## Getting started
 
+1. **Web UI (this fork):** from the repository root run `docker compose up --build` (NVIDIA GPU) or `docker compose -f docker-compose.cpu.yml up --build` (CPU), then open http://localhost:8756. Details: [Docker](docker.md).
 1. There are specific instructions for either Docker or Podman:
     1. [Docker](docker.md)
     1. [Podman](podman.md)

@@ -35,18 +35,22 @@ RUN uv pip install --system --python 3.12 torch==2.8.0 torchvision==0.23.0 torch
 
 # copy sources late to allow for caching of layers which contain all the dependencies
 COPY . /app/UltraSinger
+COPY container/webui-entrypoint.sh /usr/local/bin/webui-entrypoint.sh
 
+# Cache dir for Hugging Face / torch models (named volume in compose)
+RUN mkdir -p /app/UltraSinger/.cache \
+    && chmod 755 /usr/local/bin/webui-entrypoint.sh \
+    && chown -R 1000:1000 /app/UltraSinger
 
-# no need to run as root
-RUN chown -R 1000:1000 /app/UltraSinger
-USER 1000:1000
-
-# Web UI: FastAPI + Uvicorn (optional; CLI still runs from src/)
+# Entrypoint runs as root to chown bind mounts, then drops to uid 1000.
+# Web UI: FastAPI + Uvicorn. CLI: `python3.12 src/UltraSinger.py ...`
+ENV HOME=/app/UltraSinger
+ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/UltraSinger
 ENV WEBUI_NO_BROWSER=1
 ENV ULTRASINGER_WEBUI_HOST=0.0.0.0
 EXPOSE 8756
 
-WORKDIR /app/UltraSinger/src
-# Interactive shell by default. Web UI: `cd .. && python -m webui` then open http://localhost:8756
-CMD ["bash"]
+WORKDIR /app/UltraSinger
+ENTRYPOINT ["/usr/local/bin/webui-entrypoint.sh"]
+CMD ["python3.12", "-m", "webui"]

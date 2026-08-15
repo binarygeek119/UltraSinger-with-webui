@@ -111,6 +111,7 @@ Linux/macOS convenience scripts:
 **Run**
 
 * **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` (or `start_ultrasinger_webui.bat --hidden` to run without a visible terminal). On Linux/macOS use `start_ultrasinger_webui_linux.sh` / `start_ultrasinger_webui_macos.command` if `.venv` exists in the repo root.
+* **Docker Compose (Web UI):** from the repository root, `docker compose up --build` (NVIDIA GPU) or `docker compose -f docker-compose.cpu.yml up --build` (CPU). Open `http://localhost:8756`. Job data is stored in `./data`; optional song exports go to `./export/yarg` and `./export/ultrastar` (enable those folders in Settings). Change the host port with `WEBUI_PORT`.
 * **Tray:** set `tray_enabled` to `true` in `data/webui_config.json` (or use the Settings page), then start with `python -m webui` again.
 
 Configuration and job data live under `data/` (for example `webui_config.json`, `jobs/`). See the `webui/` package for implementation details.
@@ -144,7 +145,7 @@ Settings are edited in the browser (**Settings** page) and stored in `data/webui
 
 **Downloads page:** Per-job ZIP saves as **`<song folder>.zip`** (same name as the UltraSinger output folder under `output/`, e.g. `Artist - Title.zip`). “Download all” builds one archive whose entries are grouped under each song folder name (not `job_…` prefixes); duplicate song names in one batch get a `[job_id]` suffix on the folder. Bulk download file: `completed_songs.zip`. **Delete** / **Delete all completed**, bulk ZIP prepare.
 
-**Environment:** Jobs and the queue **persist** across WebUI restarts (`data/jobs/<job_id>/job.json` plus `data/jobs/queue.json` for order and pause). On shutdown, a rolling JSON export is written under `data/history/job_backups/` (keeps the 5 newest snapshots). Set `ULTRASINGER_WEBUI_CLEAR_JOBS_ON_START=1` to wipe `jobs/` on startup (previous “fresh queue each launch” behavior). If **YARG** or **UltraStar** export paths (Settings) point at existing folders, the worker **skips** running UltraSinger when a subfolder already exists whose name matches the job’s `Artist - Title` (case-insensitive). Set `ULTRASINGER_WEBUI_FORCE_REEXPORT=1` to disable that skip. `WEBUI_NO_BROWSER=1` forces no browser tab on start (overrides Settings “open browser on start”). `ULTRASINGER_WEBUI_HOST` and `ULTRASINGER_WEBUI_PORT` override listen address and port (e.g. Docker); they take precedence over values in `webui_config.json`.
+**Environment:** Jobs and the queue **persist** across WebUI restarts (`data/jobs/<job_id>/job.json` plus `data/jobs/queue.json` for order and pause). On shutdown, a rolling JSON export is written under `data/history/job_backups/` (keeps the 5 newest snapshots). Set `ULTRASINGER_WEBUI_CLEAR_JOBS_ON_START=1` to wipe `jobs/` on startup (previous “fresh queue each launch” behavior). If **YARG** or **UltraStar** export paths (Settings) point at existing folders, the worker **skips** running UltraSinger when a subfolder already exists whose name matches the job’s `Artist - Title` (case-insensitive). Set `ULTRASINGER_WEBUI_FORCE_REEXPORT=1` to disable that skip. `WEBUI_NO_BROWSER=1` forces no browser tab on start (overrides Settings “open browser on start”). These take precedence over `webui_config.json` when set: `ULTRASINGER_WEBUI_HOST`, `ULTRASINGER_WEBUI_PORT`, `ULTRASINGER_WEBUI_DATA_DIRECTORY`, `ULTRASINGER_WEBUI_FORCE_CPU`, `ULTRASINGER_WEBUI_TRAY`, `ULTRASINGER_YARG_EXPORT_PATH`, `ULTRASINGER_YARG_EXPORT_ENABLED`, `ULTRASINGER_ULTRASTAR_EXPORT_PATH`, `ULTRASINGER_ULTRASTAR_EXPORT_ENABLED`.
 
 **CLI (non-WebUI):** `--youtube_metadata` uses only yt-dlp metadata for YouTube URLs (no MusicBrainz). `--yarg_mode` skips writing `.mid`. See `UltraSinger.py -h` for full help.
 
@@ -367,4 +368,4 @@ You can also force CPU usage with the extra option `--force_cpu`.
 
 ### 📦 Containerized (Docker or Podman)
 
-See [container/README.md](container/README.md)
+See [container/README.md](container/README.md). For the **Web UI**, use `docker compose up --build` from the repository root (or `docker compose -f docker-compose.cpu.yml up --build` without a GPU).
