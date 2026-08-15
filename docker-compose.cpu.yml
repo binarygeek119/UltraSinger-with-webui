@@ -1,14 +1,15 @@
 # UltraSinger Web UI (CPU only — no NVIDIA GPU).
-# From the repository root:
-#   docker compose -f docker-compose.cpu.yml up --build
+# Pulls the published image (no local build):
+#   docker compose -f docker-compose.cpu.yml pull
+#   docker compose -f docker-compose.cpu.yml up
 # Then open http://localhost:8756
+#
+# Local build: docker compose -f docker-compose.cpu.yml -f docker-compose.build.yml up --build
 
 services:
   webui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ultrasinger-webui:local
+    image: ${WEBUI_IMAGE:-ghcr.io/binarygeek119/ultrasinger-with-webui:latest}
+    pull_policy: always
     container_name: UltraSinger-WebUI
     init: true
     restart: unless-stopped

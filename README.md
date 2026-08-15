@@ -111,7 +111,7 @@ Linux/macOS convenience scripts:
 **Run**
 
 * **Web UI only:** set `PYTHONPATH` to the repo root, then `python -m webui` (default: `http://127.0.0.1:8756`). On Windows you can use `start_ultrasinger_webui.bat` (or `start_ultrasinger_webui.bat --hidden` to run without a visible terminal). On Linux/macOS use `start_ultrasinger_webui_linux.sh` / `start_ultrasinger_webui_macos.command` if `.venv` exists in the repo root.
-* **Docker Compose (Web UI):** from the repository root, `docker compose up --build` (NVIDIA GPU) or `docker compose -f docker-compose.cpu.yml up --build` (CPU). Open `http://localhost:8756`. Job data is stored in `./data`; optional song exports go to `./export/yarg` and `./export/ultrastar` (enable those folders in Settings). Change the host port with `WEBUI_PORT`.
+* **Docker Compose (Web UI):** from the repository root, `docker compose pull && docker compose up` (NVIDIA GPU) or `docker compose -f docker-compose.cpu.yml pull && docker compose -f docker-compose.cpu.yml up` (CPU). That pulls `ghcr.io/binarygeek119/ultrasinger-with-webui:latest`. Open `http://localhost:8756`. Job data is stored in `./data`; optional song exports go to `./export/yarg` and `./export/ultrastar` (enable those folders in Settings). Change the host port with `WEBUI_PORT`. To build locally instead, add `-f docker-compose.build.yml` and `--build`.
 * **Tray:** set `tray_enabled` to `true` in `data/webui_config.json` (or use the Settings page), then start with `python -m webui` again.
 
 Configuration and job data live under `data/` (for example `webui_config.json`, `jobs/`). See the `webui/` package for implementation details.
@@ -368,4 +368,4 @@ You can also force CPU usage with the extra option `--force_cpu`.
 
 ### 📦 Containerized (Docker or Podman)
 
-See [container/README.md](container/README.md). For the **Web UI**, use `docker compose up --build` from the repository root (or `docker compose -f docker-compose.cpu.yml up --build` without a GPU).
+See [container/README.md](container/README.md). For the **Web UI**, use `docker compose pull && docker compose up` from the repository root (or `docker compose -f docker-compose.cpu.yml pull && docker compose -f docker-compose.cpu.yml up` without a GPU). That pulls `ghcr.io/binarygeek119/ultrasinger-with-webui:latest`.

@@ -5,9 +5,17 @@
 From the **repository root** (not this `container/` folder):
 
 ```bash
-docker compose up --build
+docker compose pull
+docker compose up
 # CPU only:
-# docker compose -f docker-compose.cpu.yml up --build
+# docker compose -f docker-compose.cpu.yml pull
+# docker compose -f docker-compose.cpu.yml up
+```
+
+This pulls `ghcr.io/binarygeek119/ultrasinger-with-webui:latest` (no local image build). To build from this repo instead:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 ```
 
 Then open http://localhost:8756
