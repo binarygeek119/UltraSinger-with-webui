@@ -1,5 +1,26 @@
 # Containerized UltraSinger (Docker)
 
+## Web UI (this fork)
+
+From the **repository root** (not this `container/` folder):
+
+```bash
+docker compose up --build
+# CPU only:
+# docker compose -f docker-compose.cpu.yml up --build
+```
+
+Then open http://localhost:8756
+
+- Job data: `./data`
+- Optional exports (enable in Settings): `./export/yarg` and `./export/ultrastar`
+- Host port: `WEBUI_PORT=8756` (change if needed)
+- NVIDIA GPU compose needs the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+
+The image starts `python3.12 -m webui`. For the original CLI shell workflow, see below.
+
+## CLI image (upstream-style)
+
 To run the docker run `git clone https://github.com/rakuri255/UltraSinger.git`
 enter the UltraSinger folder.
 run this command to build the docker
