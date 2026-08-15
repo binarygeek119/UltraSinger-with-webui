@@ -1,18 +1,18 @@
-# UltraSinger Web UI with NVIDIA GPU.
-# From the repository root:
-#   docker compose up --build
+# UltraSinger Web UI with NVIDIA GPU (legacy `runtime: nvidia`).
+# Pulls the published image (no local build):
+#   docker compose pull
+#   docker compose up
 # Then open http://localhost:8756
 #
-# CPU-only: docker compose -f docker-compose.cpu.yml up --build
+# CPU-only: docker compose -f docker-compose.cpu.yml pull && docker compose -f docker-compose.cpu.yml up
+# Local build: docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 #
 # Bind-mount host song folders by changing the left side of the export volumes.
 
 services:
   webui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ultrasinger-webui:local
+    image: ${WEBUI_IMAGE:-ghcr.io/binarygeek119/ultrasinger-with-webui:latest}
+    pull_policy: always
     container_name: UltraSinger-WebUI
     init: true
     restart: unless-stopped
@@ -38,14 +38,8 @@ services:
       - ./export/ultrastar:/export/ultrastar
       - webui-cache:/app/UltraSinger/.cache
     shm_size: "2gb"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities:
-                - gpu
+    # Legacy nvidia-docker / nvidia-container-runtime (not the Compose device-reservation API).
+    runtime: nvidia
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8756/"]
       interval: 30s

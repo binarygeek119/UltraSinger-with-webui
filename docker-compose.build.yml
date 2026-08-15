@@ -1,0 +1,11 @@
+# Optional override to build the Web UI image locally instead of pulling GHCR.
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+#   docker compose -f docker-compose.cpu.yml -f docker-compose.build.yml up --build
+
+services:
+  webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ultrasinger-webui:local
+    pull_policy: build

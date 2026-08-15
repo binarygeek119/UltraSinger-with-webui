@@ -5,9 +5,17 @@
 From the **repository root** (not this `container/` folder):
 
 ```bash
-docker compose up --build
+docker compose pull
+docker compose up
 # CPU only:
-# docker compose -f docker-compose.cpu.yml up --build
+# docker compose -f docker-compose.cpu.yml pull
+# docker compose -f docker-compose.cpu.yml up
+```
+
+This pulls `ghcr.io/binarygeek119/ultrasinger-with-webui:latest` (no local image build). To build from this repo instead:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 ```
 
 Then open http://localhost:8756
@@ -15,7 +23,7 @@ Then open http://localhost:8756
 - Job data: `./data`
 - Optional exports (enable in Settings): `./export/yarg` and `./export/ultrastar`
 - Host port: `WEBUI_PORT=8756` (change if needed)
-- NVIDIA GPU compose needs the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+- NVIDIA GPU compose uses the legacy `runtime: nvidia` (nvidia-docker / nvidia-container-runtime). Set `NVIDIA_VISIBLE_DEVICES` if you need a specific GPU.
 
 The image starts `python3.12 -m webui`. For the original CLI shell workflow, see below.
 
